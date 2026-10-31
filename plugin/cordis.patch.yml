@@ -1,0 +1,15 @@
+# Portable bundle. The three placeholders below are written by
+# install/adapt.mjs (or by hand) before DSH loads this plugin. Leaving a
+# placeholder in place makes the plugin fail its own config validation with
+# MOSS_CONFIG_WORKSPACE / MOSS_CONFIG_DATA_ROOT / MOSS_CONFIG_COMFY_URL.
+- insert:
+    - id: moss-draw
+      name: '@dsh-external/dsh-moss-draw'
+      config:
+        workspaceRoot: '__MOSS_WORKSPACE_ROOT__'
+        comfyUrl: '__MOSS_COMFY_URL__'
+        # Optional in source; adapt.mjs always writes an absolute path so the
+        # deployment owns its data root explicitly.
+        dataRoot: '__MOSS_DATA_ROOT__'
+    - id: moss-workbench-query
+      name: '@dsh-external/dsh-moss-draw/query'

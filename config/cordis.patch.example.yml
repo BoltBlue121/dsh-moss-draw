@@ -1,0 +1,40 @@
+# profile patch 示例（仅供参考，正常安装不需要手改本文件）
+#
+# 正常部署流程：install/install.ps1 调用 install/adapt.mjs，把用户提供的
+#   __MOSS_WORKSPACE_ROOT__ / __MOSS_COMFY_URL__ / __MOSS_DATA_ROOT__
+# 替换成真实值，写进【插件自身】的 cordis.patch.yml
+# （<InstallRoot>/cordis.patch.yml，随包文件，通过 package.json 的
+#  dsh.bundle.patch 作为 bundle 层加载）。profile 的 cordis.patch.yml 只用于
+# 覆盖/追加，不是安装所必需。
+#
+# 若你确实要把配置放在 profile 层（例如想在不改 InstallRoot 文件的情况下换
+# comfyUrl），优先用下面的「覆盖」写法：按 id 覆盖已由插件 bundle 插入的
+# 条目，后应用的 profile patch 会覆盖 config，不会重复注册。
+#
+# - id: moss-draw
+#   config:
+#     workspaceRoot: '<workspaceRoot 绝对路径>'
+#     comfyUrl: '<http://comfy-host:8188>'
+#     dataRoot: '<dataRoot 绝对路径>'
+#     editEngine: native
+#
+# 下面两条 insert 是「手工等价安装」示例：只有当你不使用插件自带
+# cordis.patch.yml（例如把插件 patch 清成 [] 或包被裁剪）时，才把这两条加入
+# profile patch。⚠️ 若插件自带 patch 仍会插入同 id 条目，再 insert 一次会重复
+# 注册同一个 loader id，可能导致加载失败；二选一，不要同时用。
+- insert:
+    # 主插件：预设 + 7 个 art_* 工具 + 工作台 Host + 客户端
+    - id: moss-draw
+      name: '@dsh-external/dsh-moss-draw'
+      config:
+        # 必填：绝对路径，插件只允许读取该根内被消息声明过的本地图片
+        workspaceRoot: '__MOSS_WORKSPACE_ROOT__'
+        # 必填：裸 http(s) origin，不要带 path/query/hash/userinfo
+        comfyUrl: '__MOSS_COMFY_URL__'
+        # 可选：绝对路径；省略时默认 <workspaceRoot>/private/workspace/moss-draw
+        # dataRoot: '__MOSS_DATA_ROOT__'
+        # 可选：native（默认）| legacy；只有旧 ComfyUI 核心才考虑 legacy
+        # editEngine: native
+    # 工作台只读查询服务：客户端右侧栏用它读 studio task 状态
+    - id: moss-workbench-query
+      name: '@dsh-external/dsh-moss-draw/query'

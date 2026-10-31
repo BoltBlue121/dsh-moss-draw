@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const root=new URL('../',import.meta.url);
+test('package is an additive pinned Desktop bundle with no install scripts or core copies',async()=>{
+ const pkg=JSON.parse(await fs.readFile(new URL('package.json',root),'utf8'));
+ assert.equal(pkg.name,'@dsh-external/dsh-moss-draw');
+ assert.equal(pkg.main,'host.mjs');assert.equal(pkg.dsh.bundle.patch,'./cordis.patch.yml');
+ assert.equal(pkg.engines.dsh,'0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5');
+ assert.equal(pkg.peerDependencies['@deepseek-ai/dsh-tools'],'0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5');
+ assert.equal(pkg.peerDependencies['@deepseek-ai/dsh-agent-preset-registry'],'0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5');
+ assert.equal(pkg.dependencies,undefined);
+ for(const key of ['preinstall','install','postinstall','prepare'])assert.equal(pkg.scripts?.[key],undefined);
+ assert.deepEqual(pkg.files,['host.mjs','src/','client/lib/','skills/','templates/','worker/moss-draw-style/*.py','worker/README.md','cordis.patch.yml','README.md']);
+ assert.equal(pkg.version,'0.8.0');
+ assert.equal(pkg.license,'MIT');
+ assert.match(pkg.repository.url,/github\.com\/BoltBlue121\/dsh-moss-draw/);
+ assert.match(pkg.description,/LoRA 叠加/);
+ assert.equal(pkg.private,undefined);
+ assert.ok(!pkg.files.some(entry=>['tests/','install/','verify/','dist/'].some(prefix=>entry.startsWith(prefix))),'test and operator tooling never ship inside the plugin package');
+ assert.doesNotMatch(JSON.stringify(pkg),/(?:[A-Za-z]:[\\/](?![\\/])|Civitai|safetensors)/,'package metadata must not leak host paths or model assets');
+ assert.equal(pkg.exports['./client'],'./client/lib/client.js');
+ assert.equal(pkg.dsh.client.platform,'web');
+ assert.ok(pkg.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-sidebar-right'));
+ assert.equal(pkg.peerDependencies['@deepseek-ai/dsh-commands'],'0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5');
+});
+test('bundle patch only inserts Moss, uses portable placeholders and keeps session defaults untouched',async()=>{
+ const patch=await fs.readFile(new URL('cordis.patch.yml',root),'utf8');
+ assert.match(patch,/- insert:/);assert.match(patch,/@dsh-external\/dsh-moss-draw/);
+ assert.match(patch,/__MOSS_WORKSPACE_ROOT__/);assert.match(patch,/__MOSS_COMFY_URL__/);assert.match(patch,/__MOSS_DATA_ROOT__/);
+ assert.doesNotMatch(patch,/[A-Za-z]:[/\\]/,'no absolute host path may ship in the bundle');
+ assert.ok(!/\b(update|remove|replace|delete):/.test(patch));
+ assert.ok(!/apiKey|token|bearer|defaultPreset|agent-presets/.test(patch));
+ assert.doesNotMatch(patch,/safetensors|Civitai/i);
+});

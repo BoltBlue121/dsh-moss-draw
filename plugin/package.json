@@ -1,0 +1,76 @@
+{
+  "name": "@dsh-external/dsh-moss-draw",
+  "version": "0.8.0",
+  "description": "AI 画画工作台 DSH 插件：预设、art_* 工具、右侧栏工作台、区域执行、多 LoRA 叠加与 Qwen 编辑",
+  "type": "module",
+  "main": "host.mjs",
+  "exports": {
+    ".": "./host.mjs",
+    "./scope": "./src/tools.mjs",
+    "./query": "./src/workbench-query-host.mjs",
+    "./client": "./client/lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "host.mjs",
+    "src/",
+    "client/lib/",
+    "skills/",
+    "templates/",
+    "worker/moss-draw-style/*.py",
+    "worker/README.md",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller"
+      ],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "dsh": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "3.18.5",
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-commands": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-typert-registry": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-scope": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-persona": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-attachment": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "comfyui",
+    "image-generation",
+    "lora",
+    "workbench"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoltBlue121/dsh-moss-draw.git"
+  },
+  "homepage": "https://github.com/BoltBlue121/dsh-moss-draw#readme",
+  "bugs": {
+    "url": "https://github.com/BoltBlue121/dsh-moss-draw/issues"
+  }
+}

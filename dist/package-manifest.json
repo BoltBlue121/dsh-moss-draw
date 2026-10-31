@@ -1,0 +1,344 @@
+{
+  "schema": 1,
+  "package": {
+    "name": "@dsh-external/dsh-moss-draw",
+    "version": "0.8.0"
+  },
+  "archive": "dsh-external-dsh-moss-draw-0.8.0.tgz",
+  "bytes": 287935,
+  "sha256": "aa117e57d8f53d523ec46a8d91ab506d4b8f11237c692f24c7adaa4966fd3bd7",
+  "files": [
+    {
+      "path": "package/README.md",
+      "bytes": 9140,
+      "sha256": "c7f5f3147abe18ac270c04798e3edaea66830b442923d703da2b047c1ec3e32e"
+    },
+    {
+      "path": "package/client/lib/client.js",
+      "bytes": 396562,
+      "sha256": "53d7757f614dbb09060dc57230007124fb924cc02666b9d3d1cd66928ebcf5dd"
+    },
+    {
+      "path": "package/client/lib/style.css",
+      "bytes": 21567,
+      "sha256": "c37f33b064b62973b21304eea619f87e045f4195353450c102ec6e4b10871206"
+    },
+    {
+      "path": "package/cordis.patch.yml",
+      "bytes": 707,
+      "sha256": "5ce7eaaa33a7db13029669f783ca885ca38c996186a60e9899287164e68f94dc"
+    },
+    {
+      "path": "package/host.mjs",
+      "bytes": 1016,
+      "sha256": "d5514517f010c9904c4e5dfce465676982ed9b67c360e9ae75f1116e3ee861ab"
+    },
+    {
+      "path": "package/package.json",
+      "bytes": 2406,
+      "sha256": "eeba4768dfc4bd1b3ae29270f476d9e8aaae91274d85fdb4c29497f51e198811"
+    },
+    {
+      "path": "package/skills/ai-drawing/SKILL.md",
+      "bytes": 4038,
+      "sha256": "df048d6a1c62cb019daa1aa5b3b6d28776478af505306a43f980db06fe0c2059"
+    },
+    {
+      "path": "package/skills/ai-drawing/references/k2.md",
+      "bytes": 1894,
+      "sha256": "a76552dec6bb5fa4835d6fa4525d10cae91d8816c5a70b0780e0b1eb7df193fd"
+    },
+    {
+      "path": "package/skills/ai-drawing/references/moss-modes.md",
+      "bytes": 8165,
+      "sha256": "af99161cde02ccfccaa2602ba9624ebfd95cd97a1f2b50d278e81e3aba232b0c"
+    },
+    {
+      "path": "package/skills/ai-drawing/references/promptcraft.md",
+      "bytes": 5082,
+      "sha256": "5918a376943b188b7451385a0cd5d07828745c802110e7152f4213625d4ee481"
+    },
+    {
+      "path": "package/skills/ai-drawing/references/qwen.md",
+      "bytes": 2696,
+      "sha256": "6b8d857a7255fe67314c81ffddfcb063e2ba5a27e20cd2fefa750ed73d68f80b"
+    },
+    {
+      "path": "package/skills/ai-drawing/references/regions.md",
+      "bytes": 7009,
+      "sha256": "b1231d7c5cf49c341120d662ebcae6c621cca41737a04dc1c7cfe45f047da28b"
+    },
+    {
+      "path": "package/skills/ai-drawing/references/studio.md",
+      "bytes": 9549,
+      "sha256": "fed461c45711399feda010a7cd7dd1fc7aad1f4aee9f71c057738a1f3974f4f9"
+    },
+    {
+      "path": "package/skills/ai-drawing/references/workbench.md",
+      "bytes": 4958,
+      "sha256": "698a53f515ee394f150ad377cae4e6d0f0989b2c454d16e820c6f46531fa824f"
+    },
+    {
+      "path": "package/src/backends.mjs",
+      "bytes": 9445,
+      "sha256": "cd698b889d3f32648d0aa0e9464c51eba155844b74dbabaee638f79ef1dd300c"
+    },
+    {
+      "path": "package/src/catalog.mjs",
+      "bytes": 7775,
+      "sha256": "b75c48a2fec89ef6c4509a741bbbc42069ef0b0c04624270f8ffde98e977bfea"
+    },
+    {
+      "path": "package/src/comfy.mjs",
+      "bytes": 15886,
+      "sha256": "daa400d4d35111ff0c9ae724b577094fc9d5aad10d6ff395986fefba58ebb023"
+    },
+    {
+      "path": "package/src/core.mjs",
+      "bytes": 25398,
+      "sha256": "1d86175ed2d4217b3df4252a9ef7b73f6dae1a852eaa0573a210d423c7d9fed8"
+    },
+    {
+      "path": "package/src/dispatcher.mjs",
+      "bytes": 4625,
+      "sha256": "2d17e801bca1202f8513b23457ebc7b409a53e17ba7f0663e00b8ba02e63039c"
+    },
+    {
+      "path": "package/src/guide.mjs",
+      "bytes": 2478,
+      "sha256": "6a1d2e2150777aacd49c5f2c339326e541f0778005503a076feef033be1dabd1"
+    },
+    {
+      "path": "package/src/modes.mjs",
+      "bytes": 16359,
+      "sha256": "da80a8d7df0f257dc3d7129d6b483478fd8f625b7b8a11bbd94c6e8d8744a54d"
+    },
+    {
+      "path": "package/src/native-edit.mjs",
+      "bytes": 9429,
+      "sha256": "86a261691194443e3373fd7975352ad983a73da0555cc4349ee90b58e5fc22a6"
+    },
+    {
+      "path": "package/src/preset.mjs",
+      "bytes": 3620,
+      "sha256": "6866c92d670e83315d78a5989996e77cb8fa304c01e3209ba85614113d6b05f2"
+    },
+    {
+      "path": "package/src/region-pixels.mjs",
+      "bytes": 11120,
+      "sha256": "8653b5defe391f5068a05ff1b6bed5779f91d93e57f97e1bd9ae27eeebb5ac49"
+    },
+    {
+      "path": "package/src/regions.mjs",
+      "bytes": 19926,
+      "sha256": "317acb11ac6f5980ffcad872c9a2afc9fca4b1ca1fffb913cd21ab4f16c65bd1"
+    },
+    {
+      "path": "package/src/sdk.mjs",
+      "bytes": 1632,
+      "sha256": "b72fd063a0b08f4850184942fd6f5dd4aa880d695de184d3de8f9cf529bd1316"
+    },
+    {
+      "path": "package/src/store.mjs",
+      "bytes": 7135,
+      "sha256": "61e3c9ea40172ea3b52e98b13e8c062401ac9cbd59e040d7f63c5140ba9b1be9"
+    },
+    {
+      "path": "package/src/studio-agent-host.mjs",
+      "bytes": 8636,
+      "sha256": "804bc4fb11222e9af2fa6d0bdc5f5a8e0ececfdb0917f98cef470a5219905e19"
+    },
+    {
+      "path": "package/src/studio-agent-state.mjs",
+      "bytes": 16417,
+      "sha256": "b19b4e423c0b822f5b6db89746fa44f9faebc20c11c72c6e1b0302c59c2f922b"
+    },
+    {
+      "path": "package/src/studio-archive.mjs",
+      "bytes": 6273,
+      "sha256": "997fb8fab908e4e3b04c79922d10f73b0b3fc6be57fdc86862dc73c6d7024d05"
+    },
+    {
+      "path": "package/src/studio-authorization.mjs",
+      "bytes": 6002,
+      "sha256": "ce0cfae7b819ca9b9105cc8e7a6c4d64a820073e136c656aee1439f621557228"
+    },
+    {
+      "path": "package/src/studio-body.mjs",
+      "bytes": 14952,
+      "sha256": "089ae75479b4d0f4ad0a9773fed2ee8a88e7538598bc23036e5b0a1f2e01c77b"
+    },
+    {
+      "path": "package/src/studio-camera.mjs",
+      "bytes": 46665,
+      "sha256": "1a1d8d4a95f18a36f837abfcbab89d65b02c42d3607595740fbc9bda0b87ae1d"
+    },
+    {
+      "path": "package/src/studio-consent-authority.mjs",
+      "bytes": 20655,
+      "sha256": "e0606b3fb494c233a435f919255b595965b65fca0a22a3039adc08a47a1c7945"
+    },
+    {
+      "path": "package/src/studio-consent-domain.mjs",
+      "bytes": 3790,
+      "sha256": "ad79572f26e01f8b96b585e86ee2a78c9c766a02fe39e07a6d6439cf58d6bbec"
+    },
+    {
+      "path": "package/src/studio-consent-presentation.mjs",
+      "bytes": 7347,
+      "sha256": "e973767cd0f358aab774db1009c1fccb4d620c05baf2a6ae7eab07bb120900d0"
+    },
+    {
+      "path": "package/src/studio-consent-store.mjs",
+      "bytes": 24474,
+      "sha256": "3d4281162230e5c2301c1d8b403cbd5ca877cfb39f737f02b43d521ecca998d6"
+    },
+    {
+      "path": "package/src/studio-domain.mjs",
+      "bytes": 14455,
+      "sha256": "09af6f87a83bab1fb1c6caacdf76b0e91d2674f84e02a8a1e74cbc6aae327cea"
+    },
+    {
+      "path": "package/src/studio-edit-policy.mjs",
+      "bytes": 2250,
+      "sha256": "8d5eaf8fe7c572dc206643c71703d2728e0c9b54239f2e4d5a027cae20364224"
+    },
+    {
+      "path": "package/src/studio-execution.mjs",
+      "bytes": 16402,
+      "sha256": "f32f478361713887f02e76f78ee72785323754f73f139ed62343df07c655fd7f"
+    },
+    {
+      "path": "package/src/studio-host.mjs",
+      "bytes": 6277,
+      "sha256": "fca9a16247a92ba36b5a3efe6b511fead79e2cf8a375e84c45a30ad6c4f9e506"
+    },
+    {
+      "path": "package/src/studio-policy-store.mjs",
+      "bytes": 4842,
+      "sha256": "24ed1affbe1e1c7940e0c3f61e2182d2a3b6ce199e9002a6a7a9543d0dbd1262"
+    },
+    {
+      "path": "package/src/studio-preview.mjs",
+      "bytes": 1931,
+      "sha256": "16e33a1bc7a17a079d13a08d083c3111f393bdde5c0e68177db115a11b44ff3f"
+    },
+    {
+      "path": "package/src/studio-scene.mjs",
+      "bytes": 4635,
+      "sha256": "1f3687c0670806448057fc136b529721853b1cd9ac6fe8e07402ac66d9e81097"
+    },
+    {
+      "path": "package/src/studio-series-profile.mjs",
+      "bytes": 3634,
+      "sha256": "0c29ad6d2b69fad783817b7183135aa6c341b06f3fd4a942d20b0117ac4cd608"
+    },
+    {
+      "path": "package/src/studio-shared.mjs",
+      "bytes": 7153,
+      "sha256": "9965e68ef7530e02f328d7acfb9025309563606e8f5c572ac5ed0b5f37f09487"
+    },
+    {
+      "path": "package/src/studio-store.mjs",
+      "bytes": 32544,
+      "sha256": "36788fb91b803014801e229407874d6ba94fdea37c4c7a77f99d2488a92ad388"
+    },
+    {
+      "path": "package/src/tools.mjs",
+      "bytes": 38237,
+      "sha256": "b8aea9b54a5410ecf958b14755b4f201c0960ee1ccb5eebf383503f758b72b39"
+    },
+    {
+      "path": "package/src/wait.mjs",
+      "bytes": 3282,
+      "sha256": "30450a3aad8075ab871b3b1afa30377c682d84b9c7aefbd661545c662bb44037"
+    },
+    {
+      "path": "package/src/workbench-camera.mjs",
+      "bytes": 9255,
+      "sha256": "b6754309f103a6c13b12ab2df4b97693c0fcce1baaeba8ae28e1da145e23ea6d"
+    },
+    {
+      "path": "package/src/workbench-host.mjs",
+      "bytes": 10922,
+      "sha256": "62adef5376423169455400e85136b3a47a34ea6643445f1fcecd04416f94175c"
+    },
+    {
+      "path": "package/src/workbench-query-contract.mjs",
+      "bytes": 1788,
+      "sha256": "2d9ef05acd39d8e736e64d56ddc96a86f7297316c81641d9055a684ded83b34e"
+    },
+    {
+      "path": "package/src/workbench-query-host.mjs",
+      "bytes": 722,
+      "sha256": "7f23b3935fde1dd1f647eaa90530567a26db7d99a49b78ed3d508e3982830ed6"
+    },
+    {
+      "path": "package/src/workbench-query.mjs",
+      "bytes": 853,
+      "sha256": "2dc9abb5053c7457bb6f6b2020f343849dc4515c96790a2d203aff6c8ece4f12"
+    },
+    {
+      "path": "package/src/workbench-store.mjs",
+      "bytes": 13837,
+      "sha256": "8a35babef69ee2eb102baae13144493cb10663e7dc594869e0392090df68986e"
+    },
+    {
+      "path": "package/templates/characters.json",
+      "bytes": 7374,
+      "sha256": "974078001ad06fb76dd3a54e85d0b88f5ff1cac34389a21be890fb0decbb0ff1"
+    },
+    {
+      "path": "package/templates/edit-multi.json",
+      "bytes": 1578,
+      "sha256": "582b2bb730eea9afe23f839f20330279ff255a5f6f75dd2262db49331cb8c33f"
+    },
+    {
+      "path": "package/templates/edit-single.json",
+      "bytes": 1301,
+      "sha256": "7d3c1027b062c2ab05f80677d8efe29480e9656cb8315cf57fa88a5ca9916b87"
+    },
+    {
+      "path": "package/templates/inpaint.json",
+      "bytes": 6721,
+      "sha256": "645a58b45234ccecc21145830a2790a7b513724b49be117a77290afa797fd102"
+    },
+    {
+      "path": "package/templates/k2-t2i.json",
+      "bytes": 977,
+      "sha256": "accbeee32258cf6abc902d75d46e5c9fcaa7b8e2c48c8e271243313327325e2c"
+    },
+    {
+      "path": "package/templates/moss-native-edit.json",
+      "bytes": 1600,
+      "sha256": "606a2cdf7dcce1e95bdb85d3599949f1c5a4d6ea8801f2e46ece640010a9c853"
+    },
+    {
+      "path": "package/templates/qwen-edit.json",
+      "bytes": 1430,
+      "sha256": "94f86bcb287f4e1811f32614813553948075d5fe907a7652c00f7294dc2d9015"
+    },
+    {
+      "path": "package/worker/README.md",
+      "bytes": 3907,
+      "sha256": "d260133df35016115ca753a72169b2f5d528a9f162cbf65587bf68ec81a54ff4"
+    },
+    {
+      "path": "package/worker/moss-draw-style/__init__.py",
+      "bytes": 216,
+      "sha256": "adb983b069c88674fe6c15aaaa8fb6c255029163c2e7495821afa6a862c4e5d3"
+    },
+    {
+      "path": "package/worker/moss-draw-style/nodes.py",
+      "bytes": 8934,
+      "sha256": "6eaa5f085f4182310df04ab2245f098837385b40ee933ade1186b10111109ff5"
+    },
+    {
+      "path": "package/worker/moss-draw-style/style_lora.py",
+      "bytes": 6950,
+      "sha256": "427771333f9716f8af3adf472148cd0fdb7c291dd9cbcb4ecad3d650380a172d"
+    }
+  ],
+  "generatedAt": "2026-10-31T13:42:43.175Z",
+  "note": "Runtime whitelist only: tests/docs/dev reports are excluded. Hashes are of the staged source files that were packed."
+}

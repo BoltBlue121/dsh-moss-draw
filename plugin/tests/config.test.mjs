@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import path from 'node:path';
+import {resolveConfig} from '../src/sdk.mjs';import {sessionServices} from '../src/tools.mjs';
+const input={workspaceRoot:path.resolve('.'),dataRoot:path.resolve('.scratch/test-config-unused'),comfyUrl:'http://127.0.0.1:8188'};
+test('trusted editEngine survives both Host resolution and per-session service construction',()=>{for(const editEngine of ['native','legacy']){const config=resolveConfig({...input,editEngine});assert.equal(config.editEngine,editEngine);let received;const service=sessionServices(config,c=>{received=c;return{};});service({agent:{id:'config-test'}});assert.equal(received.editEngine,editEngine);assert.equal(received.dataRoot,path.join(input.dataRoot,'sessions','config-test'));}});
+test('trusted config defaults native and rejects malformed engine instead of silently changing it',()=>{assert.equal(resolveConfig(input).editEngine,'native');for(const editEngine of [null,'unknown',{},1])assert.throws(()=>resolveConfig({...input,editEngine}),/MOSS_CONFIG_EDIT_ENGINE/);});

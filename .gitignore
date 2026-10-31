@@ -1,0 +1,10 @@
+# 开发/验证产物，不入库
+.verify-work/
+.work/
+verification/
+node_modules/
+dist/*.tgz
+*.rej
+*.orig
+*.bak
+.env
