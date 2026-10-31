@@ -20,7 +20,8 @@
     "worker/moss-draw-style/*.py",
     "worker/README.md",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {

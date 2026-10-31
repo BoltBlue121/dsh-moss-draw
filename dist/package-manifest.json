@@ -5,9 +5,14 @@
     "version": "0.8.0"
   },
   "archive": "dsh-external-dsh-moss-draw-0.8.0.tgz",
-  "bytes": 287935,
-  "sha256": "aa117e57d8f53d523ec46a8d91ab506d4b8f11237c692f24c7adaa4966fd3bd7",
+  "bytes": 288627,
+  "sha256": "43c8ee8c3979d960e5b3424a72184729d9024927b5d88c4aa1a4b01b541b592e",
   "files": [
+    {
+      "path": "package/LICENSE",
+      "bytes": 1068,
+      "sha256": "f61cda26af717a055b210879bbfb615e1c117e87f2de926cbae4813324f47ec0"
+    },
     {
       "path": "package/README.md",
       "bytes": 9140,
@@ -35,8 +40,8 @@
     },
     {
       "path": "package/package.json",
-      "bytes": 2406,
-      "sha256": "eeba4768dfc4bd1b3ae29270f476d9e8aaae91274d85fdb4c29497f51e198811"
+      "bytes": 2421,
+      "sha256": "e017213dfd4bb44e82da1558341b8982ffde9df071fc211ae3496a24f37b30ee"
     },
     {
       "path": "package/skills/ai-drawing/SKILL.md",
@@ -339,6 +344,6 @@
       "sha256": "427771333f9716f8af3adf472148cd0fdb7c291dd9cbcb4ecad3d650380a172d"
     }
   ],
-  "generatedAt": "2026-10-31T13:42:43.175Z",
+  "generatedAt": "2026-10-31T14:03:27.392Z",
   "note": "Runtime whitelist only: tests/docs/dev reports are excluded. Hashes are of the staged source files that were packed."
 }
