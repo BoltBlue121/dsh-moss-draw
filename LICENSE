@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This repository contains no third-party prompt libraries, model weights,
-generated artwork or other vendored works. It talks to a ComfyUI instance that
-you run yourself; the models, custom nodes and any LoRA files that instance
-loads are yours to obtain and license, and are not distributed here.
