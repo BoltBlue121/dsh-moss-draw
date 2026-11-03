@@ -11,7 +11,7 @@
 - 可选 GBC 需要另行准备 Python 3.13、指定依赖和合法本地权重，详见插件文档。
 - 主流程：构图 → 可编辑 Layout → 冻结原生预览 → 生成 → 审图与交付。
 
-[用户与 Agent 使用说明](plugin/README.md) · [设置说明](plugin/docs/agent-setup.md) · [验证记录](verification/VERIFICATION.md)
+[用户与 Agent 使用说明](plugin/moss-0.7.0-rc.4/README.md) · [设置说明](plugin/moss-0.7.0-rc.4/docs/agent-setup.md) · [验证记录](verification/VERIFICATION.md)
 
 ## 验证范围
 
@@ -21,10 +21,10 @@
 
 ## 源码与隐私
 
-`plugin/` 对应本次清洁源码 ZIP，含 Client 源码和构建入口，是**发行源码快照**，不是完整私有开发历史。开发测试目录不在这份发行快照内，请勿将其当作已经配置完整 CI 的开发分支。
+`plugin/moss-0.7.0-rc.4/` 对应本次清洁源码 ZIP，含 Client 源码和构建入口，是**发行源码快照**，不是完整私有开发历史。开发测试目录不在这份发行快照内，请勿将其当作已经配置完整 CI 的开发分支。
 
 本分支不包含旧 Git 历史、私有脚本、会话数据、参考图、生成作品、运行环境、权重或凭据。Release 同时提供源码 ZIP、验证记录和 SHA-256 清单。未来整合编辑器的研究和未批准方案不混入本版本。
 
 ## 许可
 
-自有实现采用 MIT；随附、未修改的第三方资料仍适用各自许可，其中包含 **CC-BY-NC-ND-4.0**。**不能将整个发行物统称为不受限制的 MIT 商用包。** 详见 [自有代码许可](plugin/LICENSE)、[第三方声明](plugin/THIRD_PARTY_NOTICES.md) 和原始 vendor 许可。
+自有实现采用 MIT；随附、未修改的第三方资料仍适用各自许可，其中包含 **CC-BY-NC-ND-4.0**。**不能将整个发行物统称为不受限制的 MIT 商用包。** 详见 [自有代码许可](plugin/moss-0.7.0-rc.4/LICENSE)、[第三方声明](plugin/moss-0.7.0-rc.4/THIRD_PARTY_NOTICES.md) 和原始 vendor 许可。
