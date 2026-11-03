@@ -1,0 +1,25 @@
+import {validateStudioDoc} from '../src/studio-domain.mjs';
+import {studioBody,studioCameraMoved,projectStudioLayout,moveStudioItems} from '../src/studio-camera.mjs';
+const fail=message=>{throw new Error(`STUDIO_LAYOUT: ${message}`);};
+const valid=l=>validateStudioDoc({kind:'layout',layout:l,caption:{caption:''}}).layout;
+const round=n=>Math.round(n*1000)/1000;
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+function box(b){if(!Array.isArray(b)||b.length!==4||b.some(n=>!Number.isFinite(n))||b[2]<b[0]||b[3]<b[1])fail('Invalid box.');}
+function targets(layout,ids,individual=false){if(!Array.isArray(ids)||ids.length>128||ids.some(id=>typeof id!=='string'||!layout.items.some(i=>i.id===id)))fail('Unknown item selection.');const set=new Set(ids),groups=new Set(individual?[]:layout.items.filter(i=>set.has(i.id)&&i.group).map(i=>i.group));return layout.items.filter(i=>set.has(i.id)||i.group&&groups.has(i.group));}
+export function fitStudioCanvas(input,width,height){const layout=valid(input);if(!Number.isInteger(width)||!Number.isInteger(height)||width<16||height<16||width>4096||height>4096||width%16||height%16)fail('Canvas dimensions must be 16..4096 multiples of 16.');const scale=Math.min(width/layout.width,height/layout.height),ox=(width-layout.width*scale)/2,oy=(height-layout.height*scale)/2;
+ for(const item of layout.items){if(item.locked)continue;const b=item.bbox,next=b.map((n,i)=>round(n*scale+(i%2?oy:ox)));if(Math.abs(b[0])<=2&&Math.abs(b[2]-layout.width)<=2){next[0]=0;next[2]=width;}if(Math.abs(b[1])<=2&&Math.abs(b[3]-layout.height)<=2){next[1]=0;next[3]=height;}item.bbox=next;}layout.width=width;layout.height=height;return valid(layout);
+}
+export function moveStudioVisual(input,ids,dx,dy,{individual=false,freeze=false,follow=false,projected=undefined,grabId=null}={}){
+ const layout=valid(input);if(!Number.isFinite(dx)||!Number.isFinite(dy))fail('Move delta must be finite.');const blocked=new Set(individual?[]:layout.items.filter(i=>i.locked&&i.group).map(i=>i.group)),members=targets(layout,ids,individual).filter(i=>!i.locked&&(!i.group||!blocked.has(i.group)));if(!members.length||dx===0&&dy===0)return layout;
+ const active=projected??studioCameraMoved(layout);let result=layout;
+ if(active){const world=members.filter(i=>studioBody(i,layout).anchor==='world').map(i=>i.id);if(world.length)result=moveStudioItems(layout,world,dx,dy,{individual,freeze:freeze&&!individual,follow,grabId:world.includes(grabId)?grabId:null});const fixed=new Set(members.filter(i=>studioBody(i,layout).anchor!=='world').map(i=>i.id));for(const item of result.items)if(fixed.has(item.id)){if(!item.body&&studioBody(item,layout).anchor==='backdrop')item.body=studioBody(item,layout);item.bbox=item.bbox.map((n,i)=>round(n+(i%2?dy:dx)));}}
+ else{const b=[Math.min(...members.map(i=>i.bbox[0])),Math.min(...members.map(i=>i.bbox[1])),Math.max(...members.map(i=>i.bbox[2])),Math.max(...members.map(i=>i.bbox[3]))];if(b[2]-b[0]<=layout.width)dx=clamp(dx,-b[0],layout.width-b[2]);if(b[3]-b[1]<=layout.height)dy=clamp(dy,-b[1],layout.height-b[3]);const chosen=new Set(members.map(i=>i.id));for(const item of result.items)if(chosen.has(item.id))item.bbox=item.bbox.map((n,i)=>round(n+(i%2?dy:dx)));}
+ return valid(result);
+}
+export function intersectStudioItems(input,selection,{projected=undefined}={}){const layout=valid(input);box(selection);const view=(projected??studioCameraMoved(layout))?projectStudioLayout(layout):null;const hit=layout.items.filter(i=>{if(i.hidden||view&&!view.items[i.id]?.visible)return false;const b=view?view.items[i.id].bbox:i.bbox;return Math.min(b[2],selection[2])>Math.max(b[0],selection[0])&&Math.min(b[3],selection[3])>Math.max(b[1],selection[1]);});return targets(layout,hit.map(i=>i.id)).map(i=>i.id);}
+export function resizeStudioRect(input,handle,dx,dy,{aspect=false,minSize=1,width=Infinity,height=Infinity}={}){
+ box(input);if(!['n','ne','e','se','s','sw','w','nw'].includes(handle)||!Number.isFinite(dx)||!Number.isFinite(dy)||!Number.isFinite(minSize)||minSize<=0||!(width>0)||!(height>0))fail('Invalid resize.');const [l,t,r,b]=input,w=r-l,h=b-t;if(w<=0||h<=0)fail('Resize requires a positive box.');
+ if(aspect&&handle.length===2){const sx=handle.includes('w')?-1:1,sy=handle.includes('n')?-1:1,ax=sx<0?r:l,ay=sy<0?b:t,raw=Math.abs(dx/w)>=Math.abs(dy/h)?1+sx*dx/w:1+sy*dy/h,min=Math.max(minSize/w,minSize/h),max=Math.min((sx<0?ax:width-ax)/w,(sy<0?ay:height-ay)/h);if(max<min)fail('Aspect ratio cannot fit inside the resize limits.');const s=clamp(raw,min,max),x=ax+sx*w*s,y=ay+sy*h*s;return[Math.min(ax,x),Math.min(ay,y),Math.max(ax,x),Math.max(ay,y)].map(round);}
+ const result=[handle.includes('w')?Math.min(r-minSize,l+dx):l,handle.includes('n')?Math.min(b-minSize,t+dy):t,handle.includes('e')?Math.max(l+minSize,r+dx):r,handle.includes('s')?Math.max(t+minSize,b+dy):b].map((n,i)=>round(clamp(n,0,i%2?height:width)));
+ if(result[2]-result[0]<minSize||result[3]-result[1]<minSize)fail('Resize cannot fit inside the canvas.');return result;
+}

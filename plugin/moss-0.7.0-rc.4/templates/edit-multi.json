@@ -1,0 +1,78 @@
+{
+  "1": {
+    "inputs": {
+      "snapshot_dir": "moss_image/MOSS-Image-SFT",
+      "adapter_dir": "moss_image/Moss-Image-Edit"
+    },
+    "class_type": "MossImageEditLoader",
+    "_meta": {
+      "title": "1 · Load MOSS Image Edit"
+    }
+  },
+  "2": {
+    "inputs": {
+      "image": "moss_tools_setup/two_cups.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "2 · Reference 1",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "3": {
+    "inputs": {
+      "image": "moss_tools_setup/two_cups.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "2 · Reference 2",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "4": {
+    "inputs": {
+      "prompt": "Change the blue cup on the left to a red ceramic cup. Keep the green cup on the right and the table unchanged.",
+      "negative_prompt": "",
+      "width": 768,
+      "height": 512,
+      "steps": 30,
+      "cfg": 4,
+      "seed": 20261023,
+      "reference_max_edge": 512,
+      "inference_shift": 5,
+      "model": [
+        "1",
+        0
+      ],
+      "reference_1": [
+        "2",
+        0
+      ],
+      "reference_2": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "MossImageEdit",
+    "_meta": {
+      "title": "3 · Describe the edit"
+    }
+  },
+  "5": {
+    "inputs": {
+      "filename_prefix": "MOSS-Tools/Edit-multi",
+      "images": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "4 · Edited image",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  }
+}

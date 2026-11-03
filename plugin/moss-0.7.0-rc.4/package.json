@@ -1,0 +1,84 @@
+{
+  "name": "@dsh-external/dsh-moss-draw",
+  "version": "0.7.0-rc.4",
+  "license": "(MIT AND CC-BY-NC-ND-4.0)",
+  "description": "AI 画画工作台：同包预设、七工具与可选 GBC/Togeari 参考图分析；Python 依赖和本地模型需单独配置",
+  "private": true,
+  "type": "module",
+  "main": "host.mjs",
+  "exports": {
+    ".": "./host.mjs",
+    "./scope": "./src/tools.mjs",
+    "./query": "./src/workbench-query-host.mjs",
+    "./client": "./client/lib/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./query/locale/*.json": "./locale/query/*.json",
+    "./query/icon": "./icon.svg"
+  },
+  "files": [
+    "host.mjs",
+    "src/",
+    "client/lib/",
+    "skills/",
+    "vendor/",
+    "templates/",
+    "worker/moss-draw-style/*.py",
+    "worker/README.md",
+    "worker/gbc/bridge.py",
+    "worker/gbc/runtime.py",
+    "worker/gbc/requirements.lock.txt",
+    "worker/gbc/build-requirements.lock.txt",
+    "scripts/setup-gbc.ps1",
+    "scripts/check-connection.mjs",
+    "scripts/lora-registry.mjs",
+    "docs/gbc-runtime.md",
+    "docs/plugin-maintenance.md",
+    "docs/agent-setup.md",
+    "docs/privacy-and-security.md",
+    "config/examples/*.json",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md",
+    "locale/*.json",
+    "locale/query/*.json",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller"
+      ],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "dsh": "0.2.1-rc.2 || 0.2.1-rc.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "3.18.5",
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-commands": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-typert-registry": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-scope": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-persona": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-attachment": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2 || 0.2.1-rc.3",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2 || 0.2.1-rc.3"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

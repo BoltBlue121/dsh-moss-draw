@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Drawing pencil and connected reference nodes</title>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#16283b"/>
+  <path d="M44 15 51 35 35 49" fill="none" stroke="#64d9ce" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="44" cy="15" r="4" fill="#64d9ce"/>
+  <circle cx="51" cy="35" r="4" fill="#64d9ce"/>
+  <circle cx="35" cy="49" r="4" fill="#64d9ce"/>
+  <path d="m13 39 20-20 9 9-20 20Z" fill="#ffd37c"/>
+  <path d="m33 19 4-4a3 3 0 0 1 4 0l5 5a3 3 0 0 1 0 4l-4 4Z" fill="#f18d85"/>
+  <path d="m13 39-3 12 12-3Z" fill="#f4f0e5"/>
+  <path d="m10 51 1.4-5.5 4.1 4.1Z" fill="#20384e"/>
+  <path d="m18 43 20-20" fill="none" stroke="#b67c30" stroke-width="2" stroke-linecap="round"/>
+</svg>

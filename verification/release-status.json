@@ -1,0 +1,42 @@
+{
+  "status": "LIVE_SINGLE_CASE_PASSED",
+  "version": "0.7.0-rc.4",
+  "acceptanceScope": "One real single-image end-to-end case only; not all-platform or full-regression certification.",
+  "liveEvidenceSource": "Lead-confirmed native acceptance; packaging verifier did not repeat inference.",
+  "singleCase": {
+    "realGbcSucceeded": true,
+    "layoutProposalAndCompletion": true,
+    "nativeFrozenPreview": true,
+    "nativeExecute": true,
+    "comfyGenerationSucceeded": true,
+    "viewReviewDeliverCompleted": true,
+    "generatedImages": 1,
+    "sameOriginalSessionPageTask": true
+  },
+  "payloadTreeSha256": "f239a6109ef2db9bb8d69e53a247d4bf6d4b148e886ff0613b24b1b07e5ef599",
+  "payloadFileCount": 104,
+  "sourceFileCount": 134,
+  "payloadUnchangedAfterLiveCase": true,
+  "vendorHashUnchanged": true,
+  "privacyHeuristicHits": 0,
+  "artifacts": [
+    {
+      "file": "dsh-external-dsh-moss-draw-0.7.0-rc.4.tgz",
+      "sha256": "783b2ae87caac5dfc682bcb77bd585806cbdcd204e9dd96dc92bfd81d0e16ad7",
+      "bytes": 458532
+    },
+    {
+      "file": "moss-0.7.0-rc.4-source.zip",
+      "sha256": "cd3700ec2f05d7df7722e64c415edd63ffe9b589d1d841d1ea8940ef7765b727",
+      "bytes": 616783
+    }
+  ],
+  "limitations": [
+    "The earlier rc3 environment-sensitive process identity test failure remains unresolved.",
+    "This is not comprehensive GUI interaction or visual-quality acceptance.",
+    "This is not a complete cross-platform or full-regression acceptance result.",
+    "A zero-hit heuristic privacy scan is not a proof that every possible sensitive pattern is absent."
+  ],
+  "privacy": "Original references, generated images, session/run identifiers, local paths and credentials are excluded from public records and source archive.",
+  "licenses": "Original project code: MIT. Unchanged vendor/moeblack material: CC-BY-NC-ND-4.0. No unrestricted commercial-use grant for the combined contents."
+}

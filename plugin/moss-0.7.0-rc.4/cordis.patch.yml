@@ -1,0 +1,7 @@
+# Additive portable bundle. Explicit operator configuration remains authoritative.
+- insert:
+    - id: moss-draw
+      name: '@dsh-external/dsh-moss-draw'
+      config: {}
+    - id: moss-workbench-query
+      name: '@dsh-external/dsh-moss-draw/query'

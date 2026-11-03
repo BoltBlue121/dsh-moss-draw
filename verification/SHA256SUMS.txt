@@ -1,0 +1,6 @@
+783b2ae87caac5dfc682bcb77bd585806cbdcd204e9dd96dc92bfd81d0e16ad7  dsh-external-dsh-moss-draw-0.7.0-rc.4.tgz
+cd3700ec2f05d7df7722e64c415edd63ffe9b589d1d841d1ea8940ef7765b727  moss-0.7.0-rc.4-source.zip
+8cf10d1379061d2b6743d4aeeb1a4c090b2008e3956d72cc35ac9109f86d0613  release-status.json
+764aacce6c07c705cec40b93d862fcb6b2ee7952b9f86790edd1a0afd32d9d7b  VERIFICATION.md
+f239a6109ef2db9bb8d69e53a247d4bf6d4b148e886ff0613b24b1b07e5ef599  payload-manifest.sha256
+9029e6d5051567517e4f857d5803673a376a6339d7ab5e918e5018eea7201bdc  source-manifest.sha256

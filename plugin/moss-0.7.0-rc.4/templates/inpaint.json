@@ -1,0 +1,366 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "moss_image_sft_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load MOSS-Image model",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3.5_9b_w4a8_gptq.safetensors",
+      "type": "moss_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load text encoder (type: moss_image)",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "flux2-vae_small.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE (Flux 2 small)",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "4": {
+    "inputs": {
+      "strength": 1,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "DifferentialDiffusion",
+    "_meta": {
+      "title": "Differential Diffusion (soft mask edge)",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image": "moss_tools_setup/two_cups_masked.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Image + mask (right-click → Open in MaskEditor)",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "19": {
+    "inputs": {
+      "value": "A bright yellow ceramic coffee cup on a wooden table, soft natural daylight."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Positive prompt: describe the masked area",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "20": {
+    "inputs": {
+      "text": [
+        "19",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Encode positive",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "21": {
+    "inputs": {
+      "text": "worst quality, bad anatomy, watermark, jpeg artifact",
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative prompt",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "30": {
+    "inputs": {
+      "expand": 8,
+      "incremental_expandrate": 0,
+      "tapered_corners": true,
+      "flip_input": false,
+      "blur_radius": 16,
+      "lerp_alpha": 1,
+      "decay_factor": 1,
+      "fill_holes": false,
+      "mask": [
+        "10",
+        1
+      ]
+    },
+    "class_type": "GrowMaskWithBlur",
+    "_meta": {
+      "title": "Grow + soften mask",
+      "cnr_id": "comfyui-kjnodes",
+      "ver": "3f20054214fec9f9234fd3841ae6f1e4287948f6"
+    }
+  },
+  "31": {
+    "inputs": {
+      "padding": 256,
+      "blur": 0,
+      "mask": [
+        "30",
+        0
+      ],
+      "image_optional": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "MaskBoundingBox+",
+    "_meta": {
+      "title": "Crop around mask (padding = context)",
+      "cnr_id": "comfyui_essentials",
+      "ver": "9d9f4bedfc9f0321c19faf71855e228c93bd0dc9"
+    }
+  },
+  "32": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 1.5,
+      "resolution_steps": 32,
+      "image": [
+        "31",
+        1
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Scale crop to ~1.5 MP",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "33": {
+    "inputs": {
+      "pixels": [
+        "32",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Encode crop",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "34": {
+    "inputs": {
+      "samples": [
+        "33",
+        0
+      ],
+      "mask": [
+        "31",
+        0
+      ]
+    },
+    "class_type": "SetLatentNoiseMask",
+    "_meta": {
+      "title": "Redraw only the mask",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "35": {
+    "inputs": {
+      "images": [
+        "32",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Crop preview (what MOSS sees)",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "40": {
+    "inputs": {
+      "seed": 20261023,
+      "steps": 25,
+      "cfg": 2.5,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "20",
+        0
+      ],
+      "negative": [
+        "21",
+        0
+      ],
+      "latent_image": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "50": {
+    "inputs": {
+      "samples": [
+        "40",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "51": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": [
+        "31",
+        4
+      ],
+      "height": [
+        "31",
+        5
+      ],
+      "crop": "disabled",
+      "image": [
+        "50",
+        0
+      ]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Scale back to crop size",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "52": {
+    "inputs": {
+      "x": [
+        "31",
+        2
+      ],
+      "y": [
+        "31",
+        3
+      ],
+      "resize_source": false,
+      "destination": [
+        "10",
+        0
+      ],
+      "source": [
+        "51",
+        0
+      ],
+      "mask": [
+        "31",
+        0
+      ]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Paste into original (outside the mask stays exact)",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "60": {
+    "inputs": {
+      "filename_prefix": "MOSS-Tools/Inpaint",
+      "images": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Result",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "61": {
+    "inputs": {
+      "mask": [
+        "30",
+        0
+      ]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "遮罩转换为图像",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "62": {
+    "inputs": {
+      "filename_prefix": "MOSS-Tools/Inpaint-effective-mask",
+      "images": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  }
+}

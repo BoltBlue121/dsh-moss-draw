@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "AI Drawing Workbench · Read-only Status",
+    "description": "Read-only workbench task and status queries for the existing drawing plugin; does not start analysis or image generation."
+  }
+}

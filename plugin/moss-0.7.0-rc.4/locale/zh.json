@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "AI 画画工作台",
+    "description": "Layout优先的绘图预设、七工具与原生工作台，连接自备本地或远端ComfyUI，支持可选GBC/Togeari分析；运行环境与模型需单独配置。"
+  }
+}
