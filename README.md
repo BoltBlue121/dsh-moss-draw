@@ -96,51 +96,13 @@ Unblock-File .\install\install.ps1
 
 从下载的 zip 解包可能给文件打上 Mark-of-the-Web，`Unblock-File` 用于清掉它。改执行策略只影响当前窗口，不改机器级配置。
 
-### 路径 B：插件市场 / `dsh plugin add`
+### 路径 B　从源码目录安装
 
-DSH 插件管理器（市场 UI）或 `dsh plugin add` 只会把包装进 profile，**不会替换三个占位符**。本仓库是 monorepo 式布局（市场条目指向 `plugin\` 子目录），所以从 GitHub 直接 `dsh plugin add` 不是文档给出的安装路径；用市场 UI 或本地 tgz 装完后，必须补跑一次适配，否则预设不会出现，Host 会报 `MOSS_CONFIG_WORKSPACE` / `MOSS_CONFIG_COMFY_URL` / `MOSS_CONFIG_DATA_ROOT`。
+从本版源码 zip 中复制 `plugin` 到长期保留的新目录。在这个副本上填写作品根目录、ComfyUI 地址和数据根目录，然后通过官方插件管理器添加并启用它的 `link:` 源。[适配与链接步骤](docs/02-部署流程.md#install-verified-bundle)
 
-```powershell
-# 1) 找到已安装包的实际目录（含 package.json 与 cordis.patch.yml）
-# 2) 写入三个配置值：用 Desktop 二进制的 Node 模式，或任意 node 24
-$env:ELECTRON_RUN_AS_NODE = '1'
-& "$env:LOCALAPPDATA\Programs\DeepSeek Harness\DeepSeek Harness.exe" `
-  .\install\adapt.mjs `
-  --plugin-dir '<已安装的包目录>' `
-  --workspace-root '<workspaceRoot>' `
-  --comfy-url 'http://127.0.0.1:8188'
+### 路径 C　从 Release 安装
 
-# 3) 若用 dsh plugin add（pnpm 只改 dependencies），手工把包名加进 profile 的 bundle 列表
-#    <DshHome>\profiles\desktop\package.json 的 dsh.profile.bundles 数组
-# 4) 正常重启 DSH
-```
-
-`adapt.mjs` 会校验 `<workspaceRoot>` 是已存在的绝对路径、`comfyUrl` 是裸 origin；对已经适配过的文件它会拒绝猜测，需要重新拷贝一份原始 `plugin\` 再适配。
-
-### 路径 C：预编译 tarball
-
-发布产物由仓库脚本生成，构建与校验都在本地完成。**新机器上通常没有 `node` 在 PATH 里**，用官方 Desktop 的 Node 模式即可（装了 node 24 也可以直接 `node`）：
-
-```powershell
-$Desktop = "$env:LOCALAPPDATA\Programs\DeepSeek Harness"   # 换成实际安装目录
-$env:ELECTRON_RUN_AS_NODE = '1'
-& "$Desktop\DeepSeek Harness.exe" .\dist\build-package.mjs
-# 产出 dist\dsh-external-dsh-moss-draw-0.9.0.tgz、dist\package-manifest.json、dist\SHA256SUMS.txt
-
-Get-Content .\dist\SHA256SUMS.txt
-Get-FileHash .\dist\dsh-external-dsh-moss-draw-0.9.0.tgz -Algorithm SHA256
-```
-
-用 `SHA256SUMS.txt` 与 `package-manifest.json`（逐文件 sha256）核对 tarball，然后装它（**GitHub Releases 发布页已附同一份 tgz、`SHA256SUMS.txt` 与源码 zip，不必自己构建**）：
-
-- **推荐**：DSH 侧栏 → 插件 → **添加插件**，填 tarball 的**绝对路径**，装完在插件页启用。桌面 profile 由 Desktop 应用独占，`dsh plugin --profile desktop` 会被拒绝（`profile "desktop" is managed exclusively by the Electron application`），不要用命令行往桌面 profile 里装。
-- 非桌面 profile（或 CLI 可用时）用：
-
-```powershell
-dsh plugin add ./dsh-external-dsh-moss-draw-0.9.0.tgz
-```
-
-接着按路径 B 的 2)–3) 执行：适配占位符、确认 `dsh.profile.bundles` 含 `@dsh-external/dsh-moss-draw`（插件管理器启用时会自己写；手工 `dsh plugin add` 只改 `dependencies`，要你补），再正常重启 DSH。
+下载同一版本的 `dsh-external-dsh-moss-draw-0.9.0.tgz`、`SHA256SUMS.txt`、`package-manifest.json` 和 GitHub 的 Source code (zip)。在写入本机配置前校验归档及解包的 121 个文件，再将适配好的目录交给官方管理器。[逐步安装与冷升级](docs/02-部署流程.md#install-verified-bundle)
 
 ## 首次运行（冒烟，不需要 GPU）
 
@@ -154,7 +116,7 @@ dsh plugin add ./dsh-external-dsh-moss-draw-0.9.0.tgz
 
 ## 配置
 
-配置写在插件自带的 `plugin\cordis.patch.yml` 里，随包只有三个占位符；安装路径 A 会自动替换，路径 B/C 需要手工跑一次 `adapt.mjs`：
+发行包用三个占位符表示作品根目录、ComfyUI 地址和数据根目录。路径 A 由安装脚本填写，路径 B/C 在独立副本上运行 `adapt.mjs` 后再链接。
 
 | 键 | 必填 | 默认 | 说明 | 校验失败错误码 |
 |---|---|---|---|---|
@@ -178,11 +140,11 @@ dsh plugin add ./dsh-external-dsh-moss-draw-0.9.0.tgz
 证据 JSON 与日志写到 `-OutDir`（默认 `<repo>\verification`，属运行产物；仓库 `.gitignore` 已忽略 `verification/`、`.verify-work/`、`.work/`）。详见 [docs/03-验证与验收.md](docs/03-验证与验收.md)。
 
 ```powershell
-# 回滚：从最新的 portable-moss-draw-* 备份恢复 profile，并移除 junction
+# 仅路径 A，恢复 install.ps1 在安装前保存的 profile
 .\install\rollback.ps1 -DshHome "$env:USERPROFILE\.dsh"
 ```
 
-回滚恢复的是**上一次安装之前**的 profile 状态，不是完整卸载；它不会删除数据根（工作台 SQLite 与生成图）。退出码：`0` 成功；`3` 参数错误或找不到备份；`5` 期望移除 junction 但遇到真实目录且未给 `-Force`。
+路径 A 的脚本恢复安装前的 profile 配置，并保留数据根。路径 B/C 通过管理器链接安装，在同一维护窗口重新链接此前保留的旧版适配目录，再核对启用状态、作品和历史。
 
 ## 仓库结构
 
@@ -210,29 +172,27 @@ repo\
 
 | DSH Desktop | 结论 | 证据 |
 |---|---|---|
-| `0.2.1-rc.2` | 已验证 | 1008 个单元测试 + real-loader cold load + client bundle load |
-| `0.2.1-rc.3` | 已验证 | 1008 个单元测试 + real-loader cold load + client bundle load |
-| `0.2.1-rc.5` | 已验证 | 1008 个单元测试 + real-loader cold load + client bundle load |
+| `0.2.1-rc.2` | 保留兼容声明 | 最近实测来自 0.8.0 |
+| `0.2.1-rc.3` | 0.9.0 本轮实测 | 1013 项测试、真实加载、双会话隔离、接手与继续 |
+| `0.2.1-rc.5` | 保留兼容声明 | 最近实测来自 0.8.0 |
 | 其它版本 | 未验证 | `install/probe.mjs` 退出码 `2`、`decision=refused`；`-AllowUnverifiedVersion` 后只能标注 experimental |
 
 已验证环境为 node 24.21.0、pnpm 11.28.5、Electron 44.x。矩阵外版本要么先跑完整验收，要么明确接受「未验证」，见 [docs/05-版本兼容矩阵.md](docs/05-版本兼容矩阵.md)。
 
 ## 安全与隐私
 
-- 仓库只含作者自己的代码与文档：没有第三方提示词库原文、没有模型权重、没有 LoRA 权重、没有生成图片、没有凭据、没有个人绝对路径。
-- 插件只通过 HTTP 与部署方指定的 ComfyUI origin 通信；不上传图片或文本到任何第三方服务。它只读取 `<workspaceRoot>` 内、且在当前消息里被用户点名过的本地图片。
+- 发行内容包括原创工作台、原样保留的 Moeblack 参考资料及其许可。模型权重、LoRA、生成图和凭据由部署者管理。
+- 生成与编辑使用配置的 ComfyUI。明确发送注释或参考图时，图片会进入当前原生会话。启用可选 GBC 视觉分析时，图片和提示可能发送给为该任务配置的模型服务。[数据与凭据流向](plugin/docs/privacy-and-security.md)
 - 插件不内置聊天渠道、不保存 API Key；模型渠道由部署方在原生模型栏选择。
-- 运行数据全部落在 `dataRoot`：`workbench\documents.sqlite`、`studio\editor.sqlite`、`sessions\<session>\` 下的请求账本、run 记录与生成图。换机器或换工作区须重新配置并从头开始。
+- 工作台的页面、修订与执行记录保存在配置的数据根。DSH 单独管理原生会话及其附件。升级时保留原数据根，切换前备份页面和历史。
 - 提交前跑 `verify/sanitize-scan.mjs`（0 命中才发布），说明见 [docs/04-内容与隐私说明.md](docs/04-内容与隐私说明.md)。
 
 ## 许可
 
-MIT，见 [LICENSE](LICENSE)。模型权重、ComfyUI 自定义节点与部署方自备的 LoRA 各有自己的许可证，由部署方获取并遵守；本仓库不包含、也不转授这些资产。
+原创代码和文档采用 MIT。`plugin/vendor/moeblack/` 下的原始参考资料采用 CC BY-NC-ND 4.0。模型、外部节点和 LoRA 依各自许可使用。[原创许可](LICENSE) · [第三方文件与许可范围](plugin/THIRD_PARTY_NOTICES.md)
 
 ## English
 
-- `@dsh-external/dsh-moss-draw` 0.8.0 is a DeepSeek Harness Desktop bundle plugin: preset `ai-draw` ("AI 画画"), seven `art_*` tools, and a right-sidebar workbench tab.
-- Text-to-image, edit, inpaint, character, and region pipelines run on a ComfyUI instance you host; the repository ships no model weights, no LoRA files, no generated artwork, and no credentials.
-- Verified on Windows against DSH Desktop `0.2.1-rc.2`, `0.2.1-rc.3`, and `0.2.1-rc.5`; other versions are unverified.
-- The package ships three `__MOSS_*__` placeholders that must be replaced with your absolute `workspaceRoot`, `comfyUrl`, and `dataRoot` (run `install/install.ps1`, or `install/adapt.mjs` after a marketplace install) before DSH can load the preset.
-- Installation, verification, and rollback commands are in the Chinese sections above; documentation is Chinese-only. License: MIT.
+Version 0.9.0 adds shared drawing tools for agents and artists in the DSH workbench. The release was tested end to end on DSH Desktop 0.2.1-rc.3. Compatibility declarations for rc.2 and rc.5 carry forward from 0.8.0.
+
+Verify the Release archive, extract it to a permanent versioned directory, and configure its workspace, ComfyUI origin and data root before linking it through Plugin Manager. Keep the previous configured directory and data root for rollback. Original code is MIT. The bundled Moeblack reference files are licensed under CC BY-NC-ND 4.0. [Deployment guide](docs/02-部署流程.md#install-verified-bundle) · [Third-party notices](plugin/THIRD_PARTY_NOTICES.md)
