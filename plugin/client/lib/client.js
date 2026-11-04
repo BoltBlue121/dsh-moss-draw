@@ -6525,7 +6525,7 @@ const ACTION_FIELDS = {
  studioStart:['page_id','expected_revision','intent','mode','max_runs'],studioAgentUpdate:['page_id','expected_revision','doc','title'],studioOpen:['page_id'],studioTaskState:[],studioTaskStatus:['page_id'],studioInspect:['page_id','expected_revision'],studioPreview:['page_id','expected_revision'],studioTakeover:['page_id','expected_revision','client_id','force'],studioPause:['page_id','expected_revision','lease_token'],studioResume:['page_id','expected_revision','lease_token','max_runs','preferences','editing_only'],studioAckOpen:['page_id','request_id','client_id','surface'],
  studioArchiveList:['query','category','offset','limit'],studioArchiveAdd:['title','category','doc','prompt'],studioArchiveGet:['archive_id'],studioArchiveUpdate:['archive_id','expected_revision','title','category'],studioArchiveDelete:['archive_id','expected_revision'],
  studioState: ['series_id','offset','limit'],studioRenameSeries:['series_id','expected_title','title'],studioDeletePage:['page_id','expected_revision','lease_token'],studioDeleteSeries:['series_id','expected_title','expected_pages'], studioCreateSeries:['title'], studioCreatePage:['series_id','title','doc'], studioGetPage:['page_id'],
- studioUpdatePage:['page_id','expected_revision','title','doc','lease_token','shape_removals'], studioPropose:['page_id','expected_revision','doc','summary'],
+ studioUpdatePage:['page_id','expected_revision','title','doc','lease_token','shape_removals','rich_removals'], studioPropose:['page_id','expected_revision','doc','summary'],
  studioResolve:['page_id','expected_revision','proposal_id','accept','reject','lease_token'],studioHistory:['page_id','revision'],studioRestore:['page_id','expected_revision','revision','lease_token','acknowledge'],studioCompile:['doc'],
  state: [], list: ['limit'], create: ['title','canvas','references','regions','prompt','qwen_full_prompt','camera'],
  get: ['document_id'], update: ['document_id','expected_revision','patch'], propose: ['document_id','expected_revision','patch','summary'],
@@ -9431,7 +9431,7 @@ function createStudioView(React) {
   const [freeCam,setFreeCam]=React.useState(false),[wire,setWire]=React.useState(false),[assist,setAssist]=React.useState({fill:true,camera:true,unify:false,check:true,onlySelection:false});
   const [renaming,setRenaming]=React.useState(null),[renameText,setRenameText]=React.useState('');
   const svgRef=React.useRef(null),stageRef=React.useRef(null),gesture=React.useRef(null),wheelRef=React.useRef(null),layerDrag=React.useRef(null),directorShell=React.useRef(null),acked=React.useRef(new Set());
-  React.useEffect(()=>{const request=state.page?.task?.presentation;if(!visible||state.busy||!request||request.status!=='queued'||acked.current.has(request.request_id)||presentation?.page_id&&presentation.page_id!==state.page.page_id)return;let stopped=false;const timer=setTimeout(()=>{if(stopped)return;acked.current.add(request.request_id);model.acknowledgePresentation(request.request_id,surface).catch(e=>{acked.current.delete(request.request_id);setNotice(e.message);});},0);return()=>{stopped=true;clearTimeout(timer);};},[visible,state.busy,state.page?.page_id,state.page?.task?.presentation?.request_id,state.page?.task?.presentation?.status,model,surface,presentation]);
+  React.useEffect(()=>{const request=state.page?.task?.presentation;if(!visible||state.busy||!request||request.status!=='queued'||request.session_id!==sessionId||!sessionId||acked.current.has(request.request_id)||presentation?.page_id&&presentation.page_id!==state.page.page_id)return;let stopped=false;const timer=setTimeout(()=>{if(stopped)return;acked.current.add(request.request_id);model.acknowledgePresentation(request.request_id,surface).catch(e=>{acked.current.delete(request.request_id);setNotice(e.message);});},0);return()=>{stopped=true;clearTimeout(timer);};},[visible,state.busy,state.page?.page_id,state.page?.task?.presentation?.request_id,state.page?.task?.presentation?.status,model,surface,presentation]);
   React.useEffect(()=>{
    const unsubscribe=model.subscribe(()=>setState(model.getSnapshot()));
    setState(model.getSnapshot());
@@ -9858,7 +9858,7 @@ function createStudioNavigator({sidebar,getModel,readTasks,storage,now=Date.now,
    const data=await readTasks(sessionId);retryAt.delete(sessionId);errors.delete(sessionId);if(!active||sidebar.mounted.getSnapshot()!==sessionId)return;
    const model=getModel(sessionId);await model.syncTask?.();if(!active||sidebar.mounted.getSnapshot()!==sessionId)return;
    const current=model.getSnapshot();if(current.busy||current.dirty||current.gestureActive||current.controlPending)return;
-   const requested=data.tasks.find(row=>row.task?.presentation?.status==='queued'&&!seenBefore(sessionId,row.task.presentation.request_id));if(!requested)return;
+   const requested=data.tasks.find(row=>row.task?.presentation?.status==='queued'&&row.task.presentation.session_id===sessionId&&!seenBefore(sessionId,row.task.presentation.request_id));if(!requested)return;
    if(current.page?.page_id!==requested.page_id)await model.open(requested.page_id);
    if(!active||sidebar.mounted.getSnapshot()!==sessionId)return;
    const latest=model.getSnapshot();if(latest.dirty||latest.controlPending)return;

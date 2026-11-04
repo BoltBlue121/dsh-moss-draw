@@ -5,8 +5,8 @@
     "version": "0.9.0"
   },
   "archive": "dsh-external-dsh-moss-draw-0.9.0.tgz",
-  "bytes": 609161,
-  "sha256": "15fb2a87ccf42fdb0cd27c76ff32354da374307ffe5aa4fb024ec28bc39c797e",
+  "bytes": 609448,
+  "sha256": "13bc417f7b8a804534311e80578ca5fd3d6fe0aaabe2387178bb9250262345d2",
   "files": [
     {
       "path": "package/CHANGELOG.md",
@@ -30,8 +30,8 @@
     },
     {
       "path": "package/client/lib/client.js",
-      "bytes": 686601,
-      "sha256": "b4fd063089e890913df38781df4c716fb8bed7f805d685dbd0b8d0c6de50bdef"
+      "bytes": 686707,
+      "sha256": "9231b771eaa18bbaf81c260e7793ad306c4a7157e641e835041a9311ac1e9346"
     },
     {
       "path": "package/client/lib/style.css",
@@ -290,8 +290,8 @@
     },
     {
       "path": "package/src/studio-agent-state.mjs",
-      "bytes": 17100,
-      "sha256": "ffe9b58d55e5f6a43a428815a8b0214858b2f5f01bb5596ad1529c9ccbca358b"
+      "bytes": 17431,
+      "sha256": "9aa6eb6416b5c6d9ef4c4b30882d11e69f09d3f4c4739bac5994e95c4d61d482"
     },
     {
       "path": "package/src/studio-analysis-host.mjs",
@@ -350,8 +350,8 @@
     },
     {
       "path": "package/src/studio-consent-store.mjs",
-      "bytes": 24660,
-      "sha256": "c49088aae4c9200f82e20f0ea881b79ce12eeea75d68493a9cd99a1777b6d974"
+      "bytes": 24684,
+      "sha256": "48ff4de9552bee6ae6785de6ce451cc309256a7184f20d0ba351d2c2d62025f1"
     },
     {
       "path": "package/src/studio-doc-version.mjs",
@@ -390,8 +390,8 @@
     },
     {
       "path": "package/src/studio-host.mjs",
-      "bytes": 8783,
-      "sha256": "e4b8a096e561e7540d49f402c467d48b4b93cb1b900ea790daec7e68cb8e8fdf"
+      "bytes": 9259,
+      "sha256": "9f89bc3ec6e663ca43ad4209ab9cf859dbbf5f5942bde3c788c8d407f1d27c56"
     },
     {
       "path": "package/src/studio-layout-evidence.mjs",
@@ -614,6 +614,6 @@
       "sha256": "70ddee23dfc1d65fc474bd888f55e22648d3d8db83c15cc3d0234d0780ba0c43"
     }
   ],
-  "generatedAt": "2026-11-04T13:00:19.254Z",
+  "generatedAt": "2026-11-04T13:12:24.792Z",
   "note": "Runtime whitelist only: tests/docs/dev reports are excluded. Hashes are of the staged source files that were packed."
 }

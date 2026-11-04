@@ -51,8 +51,11 @@ function assertTasklessTextUpdate(before,after){
  if(!isDeepStrictEqual(structure(before),structure(after)))error('STUDIO_EDIT_SCOPE','Taskless updates may change text only; propose structural changes for review.');
 }
 // Shared transaction primitives: callers validate their authority before using them.
-export function makeStudioTask({intent,mode='auto',max_runs,message_id,previous}){
- return {task_id:randomUUID(),intent,control:mode,stage:mode==='review'?'awaiting_review':'planning',max_runs,claimed_runs:0,presentation:{request_id:randomUUID(),status:'queued',requested_at:new Date().toISOString()},updated_at:new Date().toISOString(),...(message_id?{request_message_id:message_id}:{}),...(previous?{previous_task_id:previous.task_id,...(previous.preferences?{preferences:structuredClone(previous.preferences)}:{})}:{})};
+function opening(sessionId){
+ return {request_id:randomUUID(),status:'queued',requested_at:new Date().toISOString(),...(sessionId?{session_id:sessionId}:{})};
+}
+export function makeStudioTask({intent,mode='auto',max_runs,message_id,previous,session_id}){
+ return {task_id:randomUUID(),intent,control:mode,stage:mode==='review'?'awaiting_review':'planning',max_runs,claimed_runs:0,presentation:opening(session_id),updated_at:new Date().toISOString(),...(message_id?{request_message_id:message_id}:{}),...(previous?{previous_task_id:previous.task_id,...(previous.preferences?{preferences:structuredClone(previous.preferences)}:{})}:{})};
 }
 export function archiveStudioTask(db,pageId,task){db.prepare('INSERT INTO studio_task_history VALUES(?,?,?)').run(task.task_id,pageId,JSON.stringify(task));}
 export function createStudioTaskMethods(api){
@@ -61,9 +64,8 @@ export function createStudioTaskMethods(api){
  const noPending=(db,key)=>{if(pending(db,key))error('STUDIO_REVIEW_REQUIRED','Resolve the existing human review before autonomous work.');};
  const shown=(db,current,task,operation)=>{saveStudioTask(db,current.page_id,task);const next=persistMetadataChange(db,current,current.title,JSON.parse(current.doc),operation);return page(db,next);};
  const required=(db,key)=>{const task=readStudioTask(db,key);if(!task)error('STUDIO_TASK_REQUIRED','Start a task for this page first.');return task;};
- const opening=()=>({request_id:randomUUID(),status:'queued',requested_at:new Date().toISOString()});
  return {
-  async startTask(input,authorization){
+  async startTask(input,authorization,sessionId){
    request(input,['page_id','expected_revision','intent','mode','max_runs'],['page_id','expected_revision','intent']);
    const key=id(input.page_id),expected=revision(input.expected_revision),intent=text(input.intent,'task intent',4000),mode=input.mode??'auto',max=input.max_runs??1;
    if(!['auto','review'].includes(mode)||!Number.isSafeInteger(max)||max<0||max>4)error('STUDIO_INVALID_INPUT','Invalid task mode or run budget.');
@@ -90,7 +92,7 @@ export function createStudioTaskMethods(api){
      if(used)error('STUDIO_NEW_REQUEST_REQUIRED','This human request already started a task on this page.');
      archiveStudioTask(db,key,previous);
     }
-    const task=makeStudioTask({intent,mode,max_runs:max,message_id:message,previous});
+    const task=makeStudioTask({intent,mode,max_runs:max,message_id:message,previous,session_id:sessionId});
     return shown(db,current,task,'agent-start');
    });
   },
@@ -135,11 +137,15 @@ export function createStudioTaskMethods(api){
     if(input.preferences!==undefined){request(input.preferences,['prefix','negative','t2i_model','use_model_negative'],['prefix','negative']);if(input.preferences.use_model_negative!==undefined&&(input.preferences.use_model_negative!==true||input.preferences.negative!==''))error('STUDIO_INVALID_INPUT','Invalid model negative preference.');if(input.preferences.t2i_model!==undefined&&!T2I_MODELS.includes(input.preferences.t2i_model))error('STUDIO_INVALID_INPUT','Unknown MOSS t2i model preference.');if(typeof input.preferences.prefix!=='string'||input.preferences.prefix.length>12000||typeof input.preferences.negative!=='string'||input.preferences.negative.length>3000)error('STUDIO_INVALID_INPUT','Invalid shared generation preferences.');task.preferences=structuredClone(input.preferences);}
     task.control='auto';task.stage=completedText?'delivered':'planning';delete task.lease_token;delete task.owner_client;task.updated_at=new Date().toISOString();return shown(db,current,task,'human-resume');});
   },
-  async requestOpen(input){request(input,['page_id']);const key=id(input.page_id);return transaction(true,db=>{const current=row(db,key),task=required(db,key);task.presentation=opening();saveStudioTask(db,key,task);return page(db,current);});},
-  async ackOpen(input){
+  async requestOpen(input,sessionId){request(input,['page_id']);const key=id(input.page_id);return transaction(true,db=>{
+   const current=row(db,key),task=required(db,key),pending=task.presentation;
+   if(pending?.status==='queued'&&pending.session_id&&pending.session_id!==sessionId)error('STUDIO_OPEN_STALE','This presentation is queued in another session.');
+   task.presentation=opening(sessionId);saveStudioTask(db,key,task);return page(db,current);
+  });},
+  async ackOpen(input,sessionId){
    request(input,['page_id','request_id','client_id','surface']);const key=id(input.page_id),client=text(input.client_id,'client id',128);
    if(!['main','sidebar'].includes(input.surface))error('STUDIO_INVALID_INPUT','Invalid presentation surface.');
-   return transaction(true,db=>{const current=row(db,key),task=required(db,key);if(task.presentation?.request_id!==input.request_id)error('STUDIO_OPEN_STALE','This open request is no longer current.');
+   return transaction(true,db=>{const current=row(db,key),task=required(db,key);if(task.presentation?.request_id!==input.request_id||task.presentation?.session_id!==sessionId)error('STUDIO_OPEN_STALE','This open request does not belong to the current session.');
     if(task.presentation.status==='queued'){task.presentation={...task.presentation,status:'opened',surface:input.surface,client_id:client,opened_at:new Date().toISOString()};saveStudioTask(db,key,task);}return page(db,current);});
   },
   async taskHistory(input){request(input,['page_id']);const key=id(input.page_id);return transaction(false,db=>{row(db,key);if(!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='studio_task_history'").get())return{tasks:[]};return{tasks:db.prepare('SELECT value FROM studio_task_history WHERE page_id=? ORDER BY rowid DESC LIMIT 100').all(key).map(r=>publicStudioTask(JSON.parse(r.value)))};});},

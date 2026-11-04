@@ -49,7 +49,14 @@ export async function handleStudioAction(entry,action,input,signal,options={acto
   if(action==='studioApplyConsent')return entry.studio.applyConsent(args,{session_id:options.session_id,evidence:options.consentEvidence});
   if(action==='studioConsentState')return entry.studio.consentState(args);
   if(action==='studioConsentHandoff')return entry.studio.ackConsentHandoff(args);
-  if(action==='studioTaskState'){const result=await entry.studio.taskState(args);return{...result,...(entry.studio.consentState?await entry.studio.consentState({}):{})};}
+  if(action==='studioTaskState'){
+    const result=await entry.studio.taskState(args);
+    const tasks=result.tasks.map(row=>{
+      if(!row.task?.presentation||row.task.presentation.session_id===options.session_id&&options.session_id)return row;
+      const {presentation,...task}=row.task;return {...row,task};
+    });
+    return {...result,tasks,...(entry.studio.consentState?await entry.studio.consentState({}):{})};
+  }
   if(action==='studioEdit'){
     if(options.actor!=='agent')throw fault('STUDIO_ACTOR_REQUIRED','Use the workbench editor for a human edit.');
     strictObject(args,['page_id','expected_revision','edit','mode','summary']);
@@ -74,7 +81,11 @@ export async function handleStudioAction(entry,action,input,signal,options={acto
     if(!options.authorization?.message_id)throw fault('STUDIO_NEW_REQUEST_REQUIRED','A current native human instruction is required.');
     const handoff=await entry.studio.chatHandoff(args,options.authorization);if(handoff)return handoff.page??handoff;
    }
-   if(action==='studioStart')await entry.studio.assertConsentGeneration?.({message_id:options.authorization?.message_id??null,action:'start'},options.authorization?.consentEvidence);
+   if(action==='studioStart'){
+     await entry.studio.assertConsentGeneration?.({message_id:options.authorization?.message_id??null,action:'start'},options.authorization?.consentEvidence);
+     return entry.studio.startTask(args,options.actor==='agent'?options.authorization:undefined,options.session_id);
+   }
+   if(action==='studioOpen'||action==='studioAckOpen')return entry.studio[methods[action]](args,options.session_id);
   if(agentActions.has(action))return handleStudioAgentAction(entry,action,args,signal,options);
- return entry.studio[methods[action]](args,['studioStart','studioResolve'].includes(action)&&options.actor==='agent'?options.authorization:undefined);
+ return entry.studio[methods[action]](args,action==='studioResolve'&&options.actor==='agent'?options.authorization:undefined);
 }

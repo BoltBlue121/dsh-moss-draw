@@ -10,7 +10,7 @@ export function createStudioNavigator({sidebar,getModel,readTasks,storage,now=Da
    const data=await readTasks(sessionId);retryAt.delete(sessionId);errors.delete(sessionId);if(!active||sidebar.mounted.getSnapshot()!==sessionId)return;
    const model=getModel(sessionId);await model.syncTask?.();if(!active||sidebar.mounted.getSnapshot()!==sessionId)return;
    const current=model.getSnapshot();if(current.busy||current.dirty||current.gestureActive||current.controlPending)return;
-   const requested=data.tasks.find(row=>row.task?.presentation?.status==='queued'&&!seenBefore(sessionId,row.task.presentation.request_id));if(!requested)return;
+   const requested=data.tasks.find(row=>row.task?.presentation?.status==='queued'&&row.task.presentation.session_id===sessionId&&!seenBefore(sessionId,row.task.presentation.request_id));if(!requested)return;
    if(current.page?.page_id!==requested.page_id)await model.open(requested.page_id);
    if(!active||sidebar.mounted.getSnapshot()!==sessionId)return;
    const latest=model.getSnapshot();if(latest.dirty||latest.controlPending)return;

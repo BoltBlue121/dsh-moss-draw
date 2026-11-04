@@ -219,7 +219,7 @@ export function createStudioConsentMethods(api){
     if(ops.generation.mode==='add_to_active')task.max_runs=prepared.after_max;
     if(ops.generation.mode==='new_task'){
      if(decision.message_id===task.request_message_id||db.prepare('SELECT 1 FROM studio_task_history WHERE page_id=? AND json_extract(value,\'$.request_message_id\')=?').get(c.page_id,decision.message_id))fail('STUDIO_NEW_REQUEST_REQUIRED','A genuinely new human approval is required for a new task.');
-     archiveStudioTask(db,c.page_id,s.task);task=makeStudioTask({intent:ops.generation.intent,max_runs:ops.generation.runs,message_id:decision.message_id,previous:s.task});
+     archiveStudioTask(db,c.page_id,s.task);task=makeStudioTask({intent:ops.generation.intent,max_runs:ops.generation.runs,message_id:decision.message_id,previous:s.task,session_id:c.session_id});
     }
     if(ops.continue_generation&&studioTextOnlySession(db))fail('STUDIO_TEXT_ONLY','Another page still has an active text-only restriction.');
     if(task){task.updated_at=now();saveStudioTask(db,c.page_id,task);}
