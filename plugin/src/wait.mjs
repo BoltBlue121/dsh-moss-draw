@@ -2,10 +2,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 export const WAIT_MS = 30 * 60 * 1000;
 export const WAIT_TOOL_TIMEOUT_MS = WAIT_MS + 60000;
-// Field incident: the GPU worker can disappear mid-run. Every poll kept the last
-// confirmed status with NETWORK_UNKNOWN, so art_run waited the full 30 minutes
-// and the user's questions sat unanswered. Silence this long ends the wait for
-// this turn instead.
+// Field incident 2026-10-30: the GPU host left Tailscale mid-run. Every poll kept
+// the last confirmed status with NETWORK_UNKNOWN, so art_run waited 30 minutes,
+// asked for another art_run, and the user's questions sat unanswered for 90+
+// minutes. Silence this long ends the wait for this turn instead.
 export const UNREACHABLE_MS = 3 * 60 * 1000;
 const active = new Set(['queued','running','pending','submitting']);
 // Reconcile codes meaning "no usable worker answer". Conflicting markers or bad

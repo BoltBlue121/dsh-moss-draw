@@ -56,7 +56,7 @@ const desktopDir = path.resolve(args.desktopDir ?? process.env.DSH_DESKTOP_DIR ?
 const base = path.join(desktopDir, 'resources', 'app.asar', 'dsh', 'package.json');
 const ID = '@dsh-external/dsh-moss-draw';
 const MODE = 'portable';
-const EXPECTED_VERSION = '0.8.0';
+const EXPECTED_VERSION = '0.9.0';
 
 const evidence = {
   schema: 1, mode: MODE, kit: KIT, packageDir: PKG, workDir: WORK, asarBase: base,
@@ -160,7 +160,7 @@ syncBuiltinESMExports();
   assert.equal(pkg.name, ID);
   assert.equal(pkg.version, EXPECTED_VERSION, 'shipped version');
   assert.equal(pkg.private, undefined);
-  assert.equal(pkg.license, 'MIT');
+  assert.equal(pkg.license, '(MIT AND CC-BY-NC-ND-4.0)');
   assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml');
   assert.deepEqual(pkg.dsh.client.inject, ['@deepseek-ai/dsh-client-ui-sidebar-right', '@deepseek-ai/dsh-client-ui-conversation', '@deepseek-ai/dsh-api-session-controller']);
   evidence.checks.package = { name: pkg.name, version: pkg.version, files: pkg.files, clientInject: pkg.dsh.client.inject };
@@ -234,6 +234,7 @@ syncBuiltinESMExports();
     ['sessions', '@deepseek-ai/dsh-session', {}],
     ['session-projections', '@deepseek-ai/dsh-session-projection', {}],
     ['presets', '@deepseek-ai/dsh-agent-preset-registry', { default: 'ai-draw' }],
+    ['credentials', '@deepseek-ai/dsh-credentials-local', { dshHome: home, watch: false }],
     ['attachments', '@deepseek-ai/dsh-attachment-local', { dshHome: home }],
     ['candidate', ID, { workspaceRoot, dataRoot, comfyUrl: 'http://127.0.0.1:9' }],
   ].map(([id, name, config]) => ({ id, name, config }));
@@ -406,7 +407,7 @@ syncBuiltinESMExports();
     assert.deepEqual(await action({ action: 'studioApplyConsent', consent_id: asked.consent.consent_id }), applied);
     const deniedAfter = await nativeCall('art_generate', { request_id: 'cold-raw-bypass', prompt: 'Forbidden' });
     assert.equal(deniedAfter.isError, true);
-    assert(JSON.stringify(deniedAfter).includes('STUDIO_CONSENT_'));
+    assert.match(JSON.stringify(deniedAfter),/STUDIO_LAYOUT_REQUIRED/, 'even applied consent cannot bypass the strict Layout pipeline');
     human('Ask to return the clean manual owner, without generating.');
     const owner = await command({ action: 'studioTakeover', page_id: page.page_id, expected_revision: applied.page.revision, client_id: 'consent-cold-owner' });
     const handoffRequest = await action({ action: 'studioRequestConsent', page_id: page.page_id, expected_revision: owner.page.revision, request_key: 'cold-handoff', operations: { proposal: null, resume: true, exit_text_only: false, generation: { mode: 'none', runs: 0, backend: null, intent: '' }, continue_generation: false } });

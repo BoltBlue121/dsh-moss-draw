@@ -1,14 +1,16 @@
 // Portable build: no style LoRA weights are shipped. The only legal style is
 // `none`; a deployment that later supplies its own LoRA files has to extend
 // this registry, the mode lists and the K2 template as an explicit code change.
-const STYLE_MODELS = Object.freeze(['base', 'sft']);
+export const CHARACTER_MODELS = Object.freeze(['base', 'sft']);
 export const T2I_EXTRA_CANVAS = Object.freeze({ width: 2560, height: 1440 });
 export const MODELS = Object.freeze({
   base: 'moss_image_base_int8_convrot.safetensors',
   sft: 'moss_image_sft_int8_convrot.safetensors',
+  heal: 'moss_image_heal_int8_convrot.safetensors',
 });
+export const T2I_MODELS=Object.freeze(Object.keys(MODELS));
 export const STYLES = Object.freeze({
-  none: Object.freeze({ file: null, trigger: '', models: STYLE_MODELS }),
+  none: Object.freeze({ file: null, trigger: '', models: T2I_MODELS }),
 });
 export const LORA_MAX = 4;
 const LORA_FILE = /^[^\0\r\n\\]{1,240}\.safetensors$/i;
@@ -46,6 +48,14 @@ export const DEFAULTS = Object.freeze({
   steps: 50, cfg: 3, shift: 5, sampler: 'euler', scheduler: 'sgm_uniform',
   slg: '22', lora_strength: 0, batch_size: 1,
 });
+// KBlueLeaf's sample values and KohakuMossTrainer's documented Euler/sigma grid.
+// This scheduler is materialized via stock Comfy nodes, not a KSampler enum.
+export const HEAL_SCHEDULER = 'kohakumoss_train_grid';
+export const HEAL_T2I_DEFAULTS = Object.freeze({
+  ...DEFAULTS, model:'heal', style:'none', lora_strength:0, width:1024, height:1024,
+  steps:16, cfg:3, shift:5, seed:0, sampler:'euler', scheduler:HEAL_SCHEDULER,
+  negative:'worst quality, low quality, bad quality, old, lowres, blurry, cropped, jpeg artifacts, watermark, signature, bad anatomy, bad hands, extra digits, fewer digits, nsfw, explicit',
+});
 // Authoritative KSampler enums read from the worker's /object_info/KSampler.
 // Frozen here so t2i validation never depends on a live worker; a newer worker
 // only adds names, and an unknown name is rejected here rather than by a 400.
@@ -54,9 +64,11 @@ export const MOSS_SCHEDULERS = Object.freeze(['simple', 'sgm_uniform', 'karras',
 export function catalog() {
   return {
     schemaVersion: 1,
-    models: Object.keys(MODELS),
+    models: [...T2I_MODELS],
+    model_defaults: {heal:{...HEAL_T2I_DEFAULTS}},
+    model_sources: {heal:{label:'KBlueLeaf 官方示例 / KohakuMoss 官方采样',model_card:'https://huggingface.co/KBlueLeaf/MOSS-Image-heal/blob/a639943df44a4f326e95b9c43058ae7e1a0a8f34/README.md',sampler_source:'https://github.com/KohakuBlueleaf/KohakuMossTrainer/blob/b06ac60e54321955c24e818add5d32b2fad23ed6/src/kohakumoss/diffusion/sampling/schedule.py',schedule:'Euler; shifted sigmas snapped to 1000 training levels; negative branch skips block 22.'}},
     samplers: [...MOSS_SAMPLERS], schedulers: [...MOSS_SCHEDULERS],
-    styles: Object.entries(STYLES).map(([id, s]) => ({ id, models: [...s.models], characters_models: [...s.models], trigger: s.trigger })),
+    styles: Object.entries(STYLES).map(([id, s]) => ({ id, models: [...s.models], characters_models: [...CHARACTER_MODELS], trigger: s.trigger })),
     loras: {
       max: LORA_MAX, fields: ['file', 'strength', 'trigger'], default_strength: 1,
       strength_range: [0, 2], trigger_chars: 500,
@@ -66,10 +78,10 @@ export function catalog() {
     },
     defaults: { ...DEFAULTS }, limits: { ...LIMITS },
     modes: [
-      { id: 't2i', references: [0, 0], output: 'native', steps: 50, cfg: 3, sampler: 'euler', scheduler: 'sgm_uniform', caller_selectable: ['steps', 'cfg', 'shift', 'sampler', 'scheduler'], extra_sizes: [[T2I_EXTRA_CANVAS.width, T2I_EXTRA_CANVAS.height]], max_pixels: T2I_EXTRA_CANVAS.width * T2I_EXTRA_CANVAS.height },
+      { id: 't2i', models: [...T2I_MODELS], references: [0, 0], output: 'native', steps: 50, cfg: 3, sampler: 'euler', scheduler: 'sgm_uniform', caller_selectable: ['steps', 'cfg', 'shift', 'sampler', 'scheduler'], extra_sizes: [[T2I_EXTRA_CANVAS.width, T2I_EXTRA_CANVAS.height]], max_pixels: T2I_EXTRA_CANVAS.width * T2I_EXTRA_CANVAS.height },
       { id: 'edit', references: [1, 4], model: 'full-sft-edit', style: 'none', styles: ['none'], style_loader: null, style_gpu_validated: false, style_note: 'No style LoRA ships in this portable package; native Edit runs without a style loader.', steps: 30, cfg: 4, shift: 5, sampler: null, scheduler: 'MOSSImageScheduler' },
       { id: 'inpaint', references: [1, 1], mask: 'RGBA alpha: 0 edit, 255 keep; expanded/blurred effective mask', model: 'sft', style: 'none', steps: 25, cfg: 2.5, sampler: 'er_sde', scheduler: 'simple' },
-      { id: 'characters', references: [0, 0], character_count: [1, 2], model: 'sft', steps: 50, cfg: 3, sampler: 'euler', scheduler: 'simple', style_gpu_validated: false, style_note: 'No style LoRA ships in this portable package; multi-character visual quality needs per-run review.' },
+      { id: 'characters', models: [...CHARACTER_MODELS], references: [0, 0], character_count: [1, 2], model: 'sft', steps: 50, cfg: 3, sampler: 'euler', scheduler: 'simple', style_gpu_validated: false, style_note: 'No style LoRA ships in this portable package; multi-character visual quality needs per-run review.' },
       { id: 'regions', actions: ['draft', 'execute'], references: [2, 4], canvas_reference_index: 0, canvas_format: 'PNG', canvas_pixels_max: 4500000, character_reference_index_min: 1, character_pixels_max: 2100000, region_count: [1, 4], box_coordinates: 'half-open original pixels', default_style: 'none', styles: ['none'], style_gpu_validated: false, draft_inference_calls: 0, run_advances_authorized_stages: true, view_advances: false, overlap: 'later regions overwrite earlier regions', full_qwen_preserves_outside: false, guide_topic: 'regions' },
     ],
   };

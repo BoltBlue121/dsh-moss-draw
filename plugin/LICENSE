@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 BoltBlue121
+Copyright (c) 2026 MOSS Workbench contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Scope: this license applies to the original MOSS Workbench code and original
+project documentation only. It does not relicense third-party material under
+vendor/moeblack, model weights, or separately installed dependencies. See
+THIRD_PARTY_NOTICES.md and each component's license. In particular, the bundled
+Moeblack reference material remains CC-BY-NC-ND-4.0; this combined distribution
+is not a grant of unrestricted commercial or adaptation rights to that material.

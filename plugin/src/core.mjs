@@ -1,6 +1,8 @@
 import { randomUUID, randomBytes } from 'node:crypto';
+import {kohakuMossSigmas} from './heal-schedule.mjs';
 import path from 'node:path';
-import { catalog, MODELS, STYLES, DEFAULTS, LIMITS, MOSS_SAMPLERS, MOSS_SCHEDULERS, T2I_EXTRA_CANVAS, fault, strictObject, text, number, strings, runId, parseLoras, loraPrefix } from './catalog.mjs';
+import { catalog, MODELS, STYLES, DEFAULTS, HEAL_T2I_DEFAULTS, LIMITS, LORA_MAX, MOSS_SAMPLERS, MOSS_SCHEDULERS, T2I_EXTRA_CANVAS, fault, strictObject, text, number, strings, runId, parseLoras, loraPrefix } from './catalog.mjs';
+import { readLoraRegistry, mergeLoraCatalog } from './lora-registry.mjs';
 import { createStore, atomicWrite, hash } from './store.mjs';
 import { createComfy, matches, safeOutput, validatePng } from './comfy.mjs';
 import { compileMode, normalizeMode, validateAssets, extension } from './modes.mjs';
@@ -22,25 +24,27 @@ export function normalizeInput(input, assets = []) {
   const request_id = text(input.request_id, 'request_id', 128, true);
   if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(request_id)) throw fault('INVALID_INPUT', 'Invalid request_id.');
   const model = chosen(input, 'model', DEFAULTS.model);
-  const style = chosen(input, 'style', DEFAULTS.style);
+  const defaults = model === 'heal' ? HEAL_T2I_DEFAULTS : DEFAULTS;
+  const style = chosen(input, 'style', defaults.style);
   if (typeof model !== 'string' || typeof style !== 'string' || !Object.hasOwn(MODELS, model) || !Object.hasOwn(STYLES, style)) throw fault('INVALID_INPUT', 'Unknown model or style.');
   if (!STYLES[style].models.includes(model)) throw fault('MODEL_STYLE_MISMATCH', 'This style does not support the selected t2i model.');
-  const width = number(chosen(input, 'width', DEFAULTS.width), 'width', 256, T2I_EXTRA_CANVAS.width, true);
-  const height = number(chosen(input, 'height', DEFAULTS.height), 'height', 256, 2048, true);
+  const width = number(chosen(input, 'width', defaults.width), 'width', 256, T2I_EXTRA_CANVAS.width, true);
+  const height = number(chosen(input, 'height', defaults.height), 'height', 256, 2048, true);
   const extraCanvas = width === T2I_EXTRA_CANVAS.width && height === T2I_EXTRA_CANVAS.height;
   if (width % 16 || height % 16 || (!extraCanvas && (width > LIMITS.dimension_max || width * height > LIMITS.pixels))) throw fault('INVALID_INPUT', 'Use 16-aligned sides up to 2048 and 2.1 MP, or exactly 2560x1440 for t2i.');
   const lora_strength = number(chosen(input, 'lora_strength', style === 'none' ? 0 : 1), 'lora_strength', 0, 2);
   if (style === 'none' && lora_strength !== 0) throw fault('INVALID_INPUT', 'style none requires zero LoRA strength.');
   const loras = parseLoras(chosen(input, 'loras', undefined));
+  const scheduler = enumChoice(chosen(input, 'scheduler', defaults.scheduler), model === 'heal' ? [...MOSS_SCHEDULERS, HEAL_T2I_DEFAULTS.scheduler] : MOSS_SCHEDULERS, 'scheduler');
   return Object.freeze({
     request_id, backend: 'moss', mode: 't2i', prompt: text(input.prompt, 'prompt', LIMITS.prompt_chars, true),
-    negative: text(chosen(input, 'negative', ''), 'negative', LIMITS.negative_chars), model, style, width, height,
-    steps: number(chosen(input, 'steps', 50), 'steps', 1, 100, true),
-    cfg: number(chosen(input, 'cfg', 3), 'cfg', 0, 20),
-    shift: number(chosen(input, 'shift', 5), 'shift', 0, 20),
-    seed: number(chosen(input, 'seed', randomBytes(6).readUIntBE(0, 6)), 'seed', 0, Number.MAX_SAFE_INTEGER, true),
-    sampler: enumChoice(chosen(input, 'sampler', DEFAULTS.sampler), MOSS_SAMPLERS, 'sampler'),
-    scheduler: enumChoice(chosen(input, 'scheduler', DEFAULTS.scheduler), MOSS_SCHEDULERS, 'scheduler'),
+    negative: text(chosen(input, 'negative', defaults.negative ?? ''), 'negative', LIMITS.negative_chars), model, style, width, height,
+    steps: number(chosen(input, 'steps', defaults.steps), 'steps', 1, 100, true),
+    cfg: number(chosen(input, 'cfg', defaults.cfg), 'cfg', 0, 20),
+    shift: number(chosen(input, 'shift', defaults.shift), 'shift', scheduler === HEAL_T2I_DEFAULTS.scheduler ? Number.MIN_VALUE : 0, 20),
+    seed: number(chosen(input, 'seed', defaults.seed ?? randomBytes(6).readUIntBE(0, 6)), 'seed', 0, Number.MAX_SAFE_INTEGER, true),
+    sampler: enumChoice(chosen(input, 'sampler', defaults.sampler), MOSS_SAMPLERS, 'sampler'),
+    scheduler,
     slg: '22', batch_size: 1, lora_strength, ...(loras.length ? { loras } : {}),
     brief: text(chosen(input, 'brief', ''), 'brief', LIMITS.brief_chars),
     checks: Object.freeze(strings(chosen(input, 'checks', []), 'checks', 12, 160)),
@@ -86,6 +90,11 @@ export function compileGraph(params, id) {
     '11': node('VAEDecode', { samples: ['10', 0], vae: ['3', 0] }),
     '12': node('SaveImage', { images: ['11', 0], filename_prefix: `moss_draw/${id}/native` }),
   });
+  if(params.model==='heal'&&params.scheduler===HEAL_T2I_DEFAULTS.scheduler){
+    graph['13']=node('ManualSigmas',{sigmas:kohakuMossSigmas(params.steps,params.shift).join(', ')});
+    graph['14']=node('KSamplerSelect',{sampler_name:params.sampler});
+    graph['10']=node('SamplerCustom',{model:['6',0],add_noise:true,noise_seed:params.seed,cfg:params.cfg,positive:['7',0],negative:['8',0],sampler:['14',0],sigmas:['13',0],latent_image:['9',0]});
+  }
   return graph;
 }
 const now = () => new Date().toISOString();
@@ -119,11 +128,18 @@ export function createService({ dataRoot, comfyUrl, fetchImpl = fetch, adapter, 
   if (!Number.isSafeInteger(maxPixels) || maxPixels < 1 || maxPixels > 4500000) throw fault('INVALID_CONFIG', 'Invalid trusted backend pixel limit.');
   const store = createStore(dataRoot);
   const comfy = createComfy(comfyUrl, fetchImpl);
+  const comfyOrigin = new URL(comfyUrl).origin;
+  const assertTarget = record => {
+    // Legacy records have no endpoint receipt. Never invent one after the fact.
+    if (record.comfy_origin !== undefined && record.comfy_origin !== comfyOrigin) throw fault('BACKEND_CHANGED', 'This run belongs to a different configured ComfyUI target. Restore that target to reconcile; never resubmit.');
+  };
   const locked = (operation, signal) => store.locked(async () => {
     try { return await operation(); }
     catch (e) {
       if (e?.name === 'AbortError') throw e;
-      if (['INVALID_INPUT', 'MODEL_STYLE_MISMATCH', 'REQUEST_CONFLICT', 'RUN_NOT_FOUND', 'STORE_CORRUPT'].includes(e.code)) throw e;
+      // Read paths keep worker-side causes actionable ('no LoRA list', 'worker down')
+      // instead of collapsing them into LOCAL_ERROR.
+      if (['INVALID_INPUT', 'MODEL_STYLE_MISMATCH', 'REQUEST_CONFLICT', 'RUN_NOT_FOUND', 'STORE_CORRUPT', 'INVALID_RESPONSE', 'HTTP_ERROR', 'NETWORK_UNKNOWN', 'BACKEND_CHANGED'].includes(e.code)) throw e;
       throw fault('LOCAL_ERROR', 'Local operation failed; ask maintenance to inspect.');
     }
   }, signal);
@@ -167,6 +183,7 @@ export function createService({ dataRoot, comfyUrl, fetchImpl = fetch, adapter, 
   }
   async function reconcile(record, signal) {
     signal?.throwIfAborted();
+    assertTarget(record);
     // 0.1.0 treated Windows relative separators as an unsafe path. Re-check
     // collection failures with GET only; actual worker execution failure stays final.
     const retryCollection = record.status === 'failed' && record.error?.code === 'UNSAFE_OUTPUT' && record.prompt_id;
@@ -276,7 +293,7 @@ export function createService({ dataRoot, comfyUrl, fetchImpl = fetch, adapter, 
         if (params.parent_run_id && !(externalParentExists && await externalParentExists(params.parent_run_id))) await store.read(params.parent_run_id);
         if (pipelineRunId && !(externalParentExists && await externalParentExists(pipelineRunId))) throw fault('RUN_NOT_FOUND', 'Pipeline parent not found.');
         const id = randomUUID(); const at = now();
-        const proposed = { schemaVersion: 1, run_id: id, request_id: params.request_id, input_hash, params, ...(pipelineRunId ? { pipeline_run_id: pipelineRunId } : {}), max_pixels: outputMaxPixels, assets: assetMeta, uploaded: [], client_id: `moss-draw-${id}`, status: 'submitting', submission_phase: 'preparing', created_at: at, updated_at: at };
+        const proposed = { schemaVersion: 1, run_id: id, request_id: params.request_id, input_hash, params, ...(pipelineRunId ? { pipeline_run_id: pipelineRunId } : {}), max_pixels: outputMaxPixels, assets: assetMeta, uploaded: [], client_id: `moss-draw-${id}`, comfy_origin: comfyOrigin, status: 'submitting', submission_phase: 'preparing', created_at: at, updated_at: at };
         const claim = await store.claim(params.request_id, proposed);
         if (!claim.owner) {
           if (claim.value.input_hash !== input_hash || claim.value.pipeline_run_id && claim.value.pipeline_run_id !== pipelineRunId) throw fault('REQUEST_CONFLICT', 'request_id already belongs to different input; do not reuse it.');
@@ -288,6 +305,7 @@ export function createService({ dataRoot, comfyUrl, fetchImpl = fetch, adapter, 
             // permanent reservation must never be retried as a fresh submission.
             previous = { ...claim.value, status: 'unknown' };
           }
+          assertTarget(previous);
           return compact(previous);
         }
         let promptStarted = false;
@@ -347,7 +365,27 @@ export function createService({ dataRoot, comfyUrl, fetchImpl = fetch, adapter, 
     },
     context(input = {}) {
       return locked(async () => {
-        strictObject(input, ['limit', 'run_id']);
+        strictObject(input, ['limit', 'run_id', 'lora_catalog']);
+        if (input.lora_catalog === true) {
+          // The worker owns availability; the sidecar registry owns trigger words.
+          const [files, registry] = await Promise.all([comfy.loraList(), readLoraRegistry(dataRoot)]);
+          const catalog = mergeLoraCatalog(files, registry);
+          return {
+            schemaVersion: 1,
+            lora_catalog: {
+              available: files.length,
+              max_stacked: LORA_MAX,
+              strength_range: [0, 2],
+              fields: ['file', 'strength', 'trigger'],
+              registry_file: registry.file,
+              registry_present: registry.present,
+              entries: catalog.entries,
+              unregistered: catalog.unregistered,
+              missing: catalog.missing,
+              ...(registry.warnings.length ? { warnings: registry.warnings } : {}),
+            },
+          };
+        }
         const limit = number(chosen(input, 'limit', 3), 'limit', 1, 3, true);
         const full = Object.hasOwn(input, 'run_id');
         const ids = full ? [runId(input.run_id)] : await store.recent(limit, record => !record.pipeline_run_id);

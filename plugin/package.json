@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-moss-draw",
-  "version": "0.8.0",
-  "description": "AI 画画工作台 DSH 插件：预设、art_* 工具、右侧栏工作台、区域执行、多 LoRA 叠加与 Qwen 编辑",
+  "version": "0.9.0",
+  "description": "AI 画画工作台 DSH 插件，支持 Agent 和人工共编、分镜、气泡、人偶、多 LoRA 叠加及可选 GBC 参考分析",
   "type": "module",
   "main": "host.mjs",
   "exports": {
@@ -9,19 +9,41 @@
     "./scope": "./src/tools.mjs",
     "./query": "./src/workbench-query-host.mjs",
     "./client": "./client/lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./query/locale/*.json": "./locale/query/*.json",
+    "./query/icon": "./icon.svg"
   },
   "files": [
     "host.mjs",
     "src/",
     "client/lib/",
     "skills/",
+    "vendor/",
     "templates/",
     "worker/moss-draw-style/*.py",
     "worker/README.md",
+    "worker/gbc/bridge.py",
+    "worker/gbc/runtime.py",
+    "worker/gbc/requirements.lock.txt",
+    "worker/gbc/build-requirements.lock.txt",
+    "scripts/setup-gbc.ps1",
+    "scripts/check-connection.mjs",
+    "scripts/lora-registry.mjs",
+    "docs/gbc-runtime.md",
+    "docs/plugin-maintenance.md",
+    "docs/agent-setup.md",
+    "docs/privacy-and-security.md",
+    "config/examples/*.json",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md",
+    "locale/*.json",
+    "locale/query/*.json",
+    "icon.svg",
     "cordis.patch.yml",
-    "README.md",
-    "LICENSE"
+    "README.md"
   ],
   "dsh": {
     "bundle": {
@@ -57,7 +79,7 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs"
   },
-  "license": "MIT",
+  "license": "(MIT AND CC-BY-NC-ND-4.0)",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",

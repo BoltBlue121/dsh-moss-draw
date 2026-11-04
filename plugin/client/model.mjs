@@ -1,13 +1,16 @@
 import { cameraDescription, bodyFromBox } from '../src/workbench-camera.mjs';
+import { parseStudioRestoreAckError } from '../src/studio-restore-contract.mjs';
+import { readStudioSessionImage } from './studio-session-image.mjs';
 
 const ACTION_FIELDS = {
  studioConsentHandoff:['consent_id','page_id','expected_revision','nonce','client_id','lease_token'],
+ studioAnalysisStatus:['analysis_id','page_id','request_key','analysis_detail'],
  studioSetEditPolicy:['page_id','expected_revision','policy','editing_only','lease_token'],studioConfirmDescriptions:['page_id','expected_revision','lease_token'],studioGetSeriesProfile:['series_id'],studioUpdateSeriesProfile:['series_id','expected_revision','style','cast'],studioApplySeriesProfile:['page_id','expected_revision','profile_revision','bindings','caption_cast_ids','lease_token'],
  studioStart:['page_id','expected_revision','intent','mode','max_runs'],studioAgentUpdate:['page_id','expected_revision','doc','title'],studioOpen:['page_id'],studioTaskState:[],studioTaskStatus:['page_id'],studioInspect:['page_id','expected_revision'],studioPreview:['page_id','expected_revision'],studioTakeover:['page_id','expected_revision','client_id','force'],studioPause:['page_id','expected_revision','lease_token'],studioResume:['page_id','expected_revision','lease_token','max_runs','preferences','editing_only'],studioAckOpen:['page_id','request_id','client_id','surface'],
  studioArchiveList:['query','category','offset','limit'],studioArchiveAdd:['title','category','doc','prompt'],studioArchiveGet:['archive_id'],studioArchiveUpdate:['archive_id','expected_revision','title','category'],studioArchiveDelete:['archive_id','expected_revision'],
  studioState: ['series_id','offset','limit'],studioRenameSeries:['series_id','expected_title','title'],studioDeletePage:['page_id','expected_revision','lease_token'],studioDeleteSeries:['series_id','expected_title','expected_pages'], studioCreateSeries:['title'], studioCreatePage:['series_id','title','doc'], studioGetPage:['page_id'],
- studioUpdatePage:['page_id','expected_revision','title','doc','lease_token'], studioPropose:['page_id','expected_revision','doc','summary'],
- studioResolve:['page_id','expected_revision','proposal_id','accept','reject','lease_token'],studioHistory:['page_id','revision'],studioRestore:['page_id','expected_revision','revision','lease_token'],studioCompile:['doc'],
+ studioUpdatePage:['page_id','expected_revision','title','doc','lease_token','shape_removals'], studioPropose:['page_id','expected_revision','doc','summary'],
+ studioResolve:['page_id','expected_revision','proposal_id','accept','reject','lease_token'],studioHistory:['page_id','revision'],studioRestore:['page_id','expected_revision','revision','lease_token','acknowledge'],studioCompile:['doc'],
  state: [], list: ['limit'], create: ['title','canvas','references','regions','prompt','qwen_full_prompt','camera'],
  get: ['document_id'], update: ['document_id','expected_revision','patch'], propose: ['document_id','expected_revision','patch','summary'],
  resolve: ['document_id','expected_revision','proposal_id','accept','reject'], history: ['document_id','limit'],
@@ -26,8 +29,9 @@ async function imageBase64(blob){
 export function createBridge({remote,sessionId,session,query}) {
  if(typeof sessionId!=='string'||!sessionId)problem('WORKBENCH_SESSION');
  return {
+  latestSessionImage(){return readStudioSessionImage(session,sessionId);},
   async query(action,fields={},signal){
-   if(!['studioTaskState','studioTaskStatus'].includes(action))problem('WORKBENCH_QUERY_ACTION');
+   if(!['studioTaskState','studioTaskStatus','studioAnalysisStatus'].includes(action))problem('WORKBENCH_QUERY_ACTION');
    if(typeof query!=='function')problem('WORKBENCH_QUERY_UNAVAILABLE');
    if(!fields||typeof fields!=='object'||Array.isArray(fields)||Object.keys(fields).some(k=>!ACTION_FIELDS[action].includes(k)))problem('WORKBENCH_FIELD');
    signal?.throwIfAborted();const result=await query(sessionId,{action,...fields},signal);
@@ -43,7 +47,12 @@ export function createBridge({remote,sessionId,session,query}) {
    // Browser Remote methods return a Result envelope; same-process bridges may return the value directly.
    const reply=response?.ok===true?response.value:response;
    if(action==='studioState'&&reply?.result?.kind==='error'&&reply.result.text==='INVALID_INPUT')throw Error('WORKBENCH_HOST_RELOAD_REQUIRED: 当前 Host 尚未加载提示词编辑接口；请在方便时重启 DSH，再打开工作台。旧区域执行仍可用。');
-   if(reply?.result?.kind!=='success')throw Error(reply?.result?.text??'WORKBENCH_UNAVAILABLE: select the AI drawing preset');
+   if(reply?.result?.kind!=='success'){
+    // Only the restore acknowledgement is structured; the strict wire check keeps
+    // every other error a plain code and nothing is retried automatically.
+    if(action==='studioRestore'){const ack=parseStudioRestoreAckError(reply?.result?.text);if(ack)throw Object.assign(Error(ack.message),{code:ack.code,diff:ack.diff});}
+    throw Error(reply?.result?.text??'WORKBENCH_UNAVAILABLE: select the AI drawing preset');
+   }
    if(typeof reply.result.text!=='string'||reply.result.text.length>48*1024*1024)problem('WORKBENCH_RESPONSE');
    let value;try{value=JSON.parse(reply.result.text);}catch{problem('WORKBENCH_RESPONSE');}
    if(action==='asset'&&(!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(value?.data_url??'')||!Number.isSafeInteger(value.width)||!Number.isSafeInteger(value.height)||value.width<1||value.height<1))problem('WORKBENCH_ASSET');
@@ -63,10 +72,10 @@ export function createBridge({remote,sessionId,session,query}) {
     const response=await session.prompt([{type:'image',data,mediaType:'image/png',name:String(reference.name||'reference.png').replace(/[\u0000-\u001f]/g,'_').slice(0,200)},{type:'text',text}],mode,signal);
     if(!response?.ok)throw Error(response?.error?.message??'WORKBENCH_IMAGE_PROMPT_REJECTED');return response;
    },
-   async prompt(text,mode='queue',signal) {
+   async prompt(text,mode='queue',signal,requestId) {
    if(typeof text!=='string'||!text.trim()||text.length>3000||!['queue','steer'].includes(mode))problem('WORKBENCH_PROMPT');
    if(!session?.prompt)problem('WORKBENCH_SESSION');
-   const response=await session.prompt([{type:'text',text}],mode,signal);
+   const response=await session.prompt([{type:'text',text}],mode,signal,...(requestId===undefined?[]:[requestId]));
    if(!response?.ok)throw Error(response?.error?.message??'WORKBENCH_PROMPT_REJECTED');
    return response;
   },

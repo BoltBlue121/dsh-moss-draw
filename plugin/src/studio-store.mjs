@@ -3,7 +3,12 @@ import {existsSync, mkdirSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
 import {randomUUID} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
-import {validateStudioDoc} from './studio-domain.mjs';
+import {validateStudioDoc,upgradeStudioDoc} from './studio-domain.mjs';
+import {assertStudioRigLocks} from './studio-rig.mjs';
+import {assertStudioAnnotationTransition} from './studio-annotations.mjs';
+import {assertStudioRichRemovals,assertStudioShapeTransition,studioDocSchemaVersion} from './studio-doc-version.mjs';
+import {resolveStudioSharedDoc} from './studio-shared.mjs';
+import {deriveStudioRestoreDiff,sameStudioRestoreDiff,studioRestoreNeedsAck,STUDIO_RESTORE_ACK_MESSAGE} from './studio-restore-contract.mjs';
 import {STUDIO_TASK_SCHEMA,readStudioTask,publicStudioTask,requireStudioHuman,createStudioTaskMethods} from './studio-agent-state.mjs';
 import {STUDIO_PLAN_SCHEMA,createStudioPlanMethods} from './studio-execution.mjs';
 import {STUDIO_POLICY_SCHEMA,readStudioPolicy,assertStudioPagePolicy,createStudioPolicyMethods,studioDescriptionsStatus,acknowledgeStudioDescriptions,checkStudioDescriptionRefresh,studioTextOnlySession,setStudioTextOnly} from './studio-policy-store.mjs';
@@ -39,6 +44,33 @@ function revision(value) {
 }
 function text(value, name, max) {
   if (typeof value !== 'string' || !value.trim() || value.length > max) invalid(`Invalid ${name}.`);
+  return value;
+}
+const MAX_SHAPE_REMOVALS = 128;
+// shape_removals is a UI-only request field; item ids follow the same nonblank
+// trimmed <=80 rule as Doc item ids. The transition below checks that each id
+// really loses a shape and that no unlisted id does.
+function shapeRemovals(value) {
+  if (!Array.isArray(value) || value.length > MAX_SHAPE_REMOVALS
+    || Reflect.ownKeys(value).length !== value.length + 1) {
+    invalid('shape_removals must be a dense array of at most 128 item ids.');
+  }
+  const ids = [];
+  for (let index = 0; index < value.length; index++) {
+    const entry = Object.getOwnPropertyDescriptor(value, String(index));
+    if (!entry?.enumerable || !Object.hasOwn(entry, 'value') || typeof entry.value !== 'string'
+      || !entry.value.trim() || entry.value.length > 80) {
+      invalid('shape_removals must contain nonblank item ids of at most 80 characters.');
+    }
+    ids.push(entry.value);
+  }
+  return ids;
+}
+function acknowledgeValue(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) {
+    invalid('Invalid restore acknowledgement.');
+  }
   return value;
 }
 
@@ -95,6 +127,8 @@ function commonOrderChanged(beforeItems, afterItems) {
   return !isDeepStrictEqual(beforeCommon, afterCommon);
 }
 function lockedUnchanged(before, after) {
+  assertStudioRigLocks(before.layout,after.layout);
+  assertStudioAnnotationTransition(before,after);
   const afterById = new Map(after.layout.items.map((item, index) => [item.id, {item, index}]));
   const commonIndices = before.layout.items
     .map((item, beforeIndex) => ({item, beforeIndex, afterEntry: afterById.get(item.id)}))
@@ -232,6 +266,7 @@ function mergeProposal(current, proposal, accepted) {
     }
   }
   const validated = validateStudioDoc(merged);
+  resolveStudioSharedDoc(validated);
   lockedUnchanged(current, validated);
   return validated;
 }
@@ -260,7 +295,8 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS studio_proposals_page ON studio_proposals(page_id, submitted_revision DESC);
 `;
 
-export function createStudioStore({dataRoot}) {
+export function createStudioStore({dataRoot,workflowMode='compat',connectionIdentity}) {
+  if(!['compat','layout'].includes(workflowMode)||connectionIdentity!==undefined&&(typeof connectionIdentity!=='string'||!connectionIdentity.trim()||connectionIdentity.length>4096))invalid('Invalid trusted workflow or connection identity.');
   if (typeof dataRoot !== 'string' || !path.isAbsolute(dataRoot) || dataRoot.includes('\0')) invalid('Studio dataRoot must be a trusted absolute path.');
   const directory = path.join(path.resolve(dataRoot), 'studio');
   const filename = path.join(directory, 'editor.sqlite');
@@ -330,15 +366,34 @@ export function createStudioStore({dataRoot}) {
       saveProposal(db, proposal);
     }
   }
+  // `doc` is either a validated object for a content change or the exact stored JSON
+  // string for a metadata-only snapshot, which must keep the persisted bytes.
   function snapshot(db, previous, title, doc, operation) {
     revision(previous.revision);
     const next = previous.revision + 1, at = now();
+    const clean = typeof doc === 'string' ? JSON.parse(doc) : doc;
+    const encoded = typeof doc === 'string' ? doc : JSON.stringify(doc);
     const changed = db.prepare('UPDATE studio_pages SET title=?,revision=?,kind=?,doc=?,updated_at=? WHERE page_id=? AND revision=?')
-      .run(title, next, doc.kind, JSON.stringify(doc), at, previous.page_id, previous.revision);
+      .run(title, next, clean.kind, encoded, at, previous.page_id, previous.revision);
     if (changed.changes !== 1) conflict();
     db.prepare('INSERT INTO studio_revisions VALUES(?,?,?,?,?)')
-      .run(previous.page_id, next, operation, at, JSON.stringify({title, doc}));
+      .run(previous.page_id, next, operation, at, JSON.stringify({title, doc: clean}));
     return row(db, previous.page_id);
+  }
+  // Every content write goes through one transition assertion before the snapshot.
+  // allow_upgrade is a trusted caller constant (never read from the request or Doc);
+  // callers must pass the options explicitly.
+  function persistDocChange(db, previous, title, doc, operation, options) {
+    assertStudioShapeTransition(JSON.parse(previous.doc), doc, options);
+    return snapshot(db, previous, title, doc, operation);
+  }
+  // Metadata-only writes (task, policy, proposal record, handoff) must never alter
+  // the document: compare it deeply, then reuse the stored bytes without revalidating.
+  function persistMetadataChange(db, previous, title, doc, operation) {
+    if (!isDeepStrictEqual(JSON.parse(previous.doc), doc)) {
+      throw fault('STUDIO_DOC_CHANGED', 'A metadata-only update must not change the page document.');
+    }
+    return snapshot(db, previous, title, previous.doc, operation);
   }
 
   // Pure-within-transaction proposal preparation, shared by UI and consent execution.
@@ -349,6 +404,9 @@ export function createStudioStore({dataRoot}) {
     if(!entry)notFound('Proposal');const proposal=JSON.parse(entry.value);if(proposal.status!=='pending')conflict();
     if(proposal.submitted_revision!==previous.revision){const gap=db.prepare('SELECT revision,operation FROM studio_revisions WHERE page_id=? AND revision>? AND revision<=? ORDER BY revision').all(previous.page_id,proposal.submitted_revision,previous.revision);if(gap.length!==previous.revision-proposal.submitted_revision||gap.some(r=>!['human-takeover','human-pause'].includes(r.operation)))conflict();}
     const current=JSON.parse(previous.doc),doc=reject?current:mergeProposal(current,proposal,accepted),status=reject?'rejected':resolutionStatus(proposal,accepted);
+    // The shared merge accepts content as-is: proposals cannot upgrade the schema
+    // or drop a same-id shape. Whole-item deletion stays an ordinary change.
+    assertStudioShapeTransition(current,doc,{allow_upgrade:false});
     if(!reject&&proposal.descriptions_checked&&status==='accepted')checkStudioDescriptionRefresh(current,doc);
     return {proposal,doc,status,accepted,reject};
   }
@@ -359,11 +417,13 @@ export function createStudioStore({dataRoot}) {
   }
 
   return Object.freeze({
-    ...createStudioConsentMethods({transaction,row,checked,page,snapshot,stalePending,request,id,revision,text,prepareProposalResolution,commitProposalResolution,assertPagePolicy:assertStudioPagePolicy,assertSharedUnchanged:assertStudioSharedUnchanged,lockedUnchanged,readPolicy:readStudioPolicy,studioTextOnlySession,setStudioTextOnly}),
-    ...createStudioTaskMethods({transaction,row,checked,page,snapshot,stalePending,request,id,revision,text,validateDoc:validateStudioDoc,lockedUnchanged,assertPagePolicy:assertStudioPagePolicy,assertSharedUnchanged:assertStudioSharedUnchanged,acknowledgeDescriptions:acknowledgeStudioDescriptions,checkDescriptionRefresh:checkStudioDescriptionRefresh,studioTextOnlySession,setStudioTextOnly,assertConsentGeneration:assertStudioConsentGeneration}),
-    ...createStudioPolicyMethods({transaction,checked,page,snapshot,stalePending,request,id,revision}),
-    ...createStudioSeriesProfileMethods({transaction,row,seriesRow,checked,page,snapshot,stalePending,request,id,revision,validateDoc:validateStudioDoc}),
-    ...createStudioPlanMethods({transaction,row,checked,request,id,revision,text,studioTextOnlySession}),
+    ...createStudioConsentMethods({transaction,row,checked,page,persistDocChange,persistMetadataChange,stalePending,request,id,revision,text,prepareProposalResolution,commitProposalResolution,assertPagePolicy:assertStudioPagePolicy,assertSharedUnchanged:assertStudioSharedUnchanged,lockedUnchanged,readPolicy:readStudioPolicy,studioTextOnlySession,setStudioTextOnly}),
+    ...createStudioTaskMethods({transaction,row,checked,page,persistDocChange,persistMetadataChange,stalePending,request,id,revision,text,validateDoc:validateStudioDoc,lockedUnchanged,assertPagePolicy:assertStudioPagePolicy,assertSharedUnchanged:assertStudioSharedUnchanged,acknowledgeDescriptions:acknowledgeStudioDescriptions,checkDescriptionRefresh:checkStudioDescriptionRefresh,studioTextOnlySession,setStudioTextOnly,assertConsentGeneration:assertStudioConsentGeneration}),
+    // Policy methods only ever write metadata, so their existing `snapshot` slot
+    // receives the guarded metadata writer; this keeps that module out of scope.
+    ...createStudioPolicyMethods({transaction,checked,page,snapshot:persistMetadataChange,stalePending,request,id,revision}),
+    ...createStudioSeriesProfileMethods({transaction,row,seriesRow,checked,page,persistDocChange,stalePending,request,id,revision,validateDoc:validateStudioDoc}),
+    ...createStudioPlanMethods({transaction,row,checked,request,id,revision,text,studioTextOnlySession,workflowMode,connectionIdentity}),
     async state(input = {}) {
       request(input, ['series_id','offset','limit'],[]);
       const seriesId=input.series_id===undefined?undefined:id(input.series_id),offset=input.offset??0,limit=input.limit??100;
@@ -425,30 +485,42 @@ export function createStudioStore({dataRoot}) {
       return transaction(false, db => page(db, row(db, pageId)));
     },
     async updatePage(input) {
-      request(input, ['page_id', 'expected_revision', 'title', 'doc','lease_token'], ['page_id', 'expected_revision', 'doc']);
+      request(input, ['page_id', 'expected_revision', 'title', 'doc','lease_token','shape_removals','rich_removals'], ['page_id', 'expected_revision', 'doc']);
       const pageId = id(input.page_id), expected = revision(input.expected_revision), doc = validateStudioDoc(input.doc);
       const title = Object.hasOwn(input, 'title') ? text(input.title, 'page title', 200) : undefined;
+      // The human editor may upgrade v1 -> v2 and approve an exact same-id shape loss.
+      const removals = Object.hasOwn(input, 'shape_removals') ? shapeRemovals(input.shape_removals) : [];
       return transaction(true, db => {
         const previous = checked(db, pageId, expected);
         requireStudioHuman(db,pageId,input.lease_token);
-        const next = snapshot(db, previous, title ?? previous.title, doc, 'update');
+        const original=JSON.parse(previous.doc);
+        assertStudioRichRemovals(original,doc,input.rich_removals);
+        assertStudioRigLocks(original.layout,doc.layout);
+        assertStudioAnnotationTransition(original,doc);
+        const next = persistDocChange(db, previous, title ?? previous.title, doc, 'update',
+          {allow_upgrade: true, shape_removals: removals});
         stalePending(db, next, next.updated_at);
         return page(db, next);
       });
     },
-    async propose(input) {
+    async propose(input,richRemovals) {
       request(input, ['page_id', 'expected_revision', 'doc', 'summary','descriptions_checked'], ['page_id','expected_revision','doc','summary']);
       if(input.descriptions_checked!==undefined&&typeof input.descriptions_checked!=='boolean')invalid('descriptions_checked must be boolean.');
       const pageId = id(input.page_id), expected = revision(input.expected_revision);
       const proposed = validateStudioDoc(input.doc), summary = text(input.summary, 'proposal summary', 1000);
+      resolveStudioSharedDoc(proposed);
       return transaction(true, db => {
         const previous = checked(db, pageId, expected), base = JSON.parse(previous.doc),task=readStudioTask(db,pageId);
+        assertStudioRichRemovals(base,proposed,richRemovals);
         if(task&&['manual','paused'].includes(task.control))throw fault('STUDIO_HUMAN_CONTROL','Human control blocks Agent proposals.');
         assertStudioSharedUnchanged(base,proposed);
         assertStudioPagePolicy(db,previous,proposed);
         lockedUnchanged(base, proposed);
         if(input.descriptions_checked)checkStudioDescriptionRefresh(base,proposed);
-        const next = snapshot(db, previous, previous.title, base, 'propose');
+        // A proposal is a metadata write for the page; it may not change the schema
+        // version or remove a same-id shape (whole-item deletion stays ordinary).
+        assertStudioShapeTransition(base,proposed,{allow_upgrade:false});
+        const next = persistMetadataChange(db, previous, previous.title, base, 'propose');
         stalePending(db, next, next.updated_at);
         const proposal = {
           proposal_id: randomUUID(), status: 'pending', summary,
@@ -473,7 +545,7 @@ export function createStudioStore({dataRoot}) {
         }else requireStudioHuman(db,pageId,input.lease_token);
         const resolution=prepareProposalResolution(db,previous,{proposal_id:proposalId,accept:accepted,reject});
         if(authorization?.message_id){assertStudioSharedUnchanged(JSON.parse(previous.doc),resolution.doc);assertStudioPagePolicy(db,previous,resolution.doc);lockedUnchanged(JSON.parse(previous.doc),resolution.doc);}
-        const next=snapshot(db,previous,previous.title,resolution.doc,reject?'reject':'accept');
+        const next=persistDocChange(db,previous,previous.title,resolution.doc,reject?'reject':'accept',{allow_upgrade:false});
         commitProposalResolution(db,resolution,next);
         stalePending(db, next, next.updated_at);
         return page(db, next);
@@ -494,15 +566,33 @@ export function createStudioStore({dataRoot}) {
       });
     },
     async restore(input) {
-      request(input, ['page_id', 'expected_revision', 'revision','lease_token'],['page_id','expected_revision','revision']);
+      request(input, ['page_id', 'expected_revision', 'revision','lease_token','acknowledge'],['page_id','expected_revision','revision']);
       const pageId = id(input.page_id), expected = revision(input.expected_revision), target = revision(input.revision);
+      const acknowledge = Object.hasOwn(input, 'acknowledge') ? acknowledgeValue(input.acknowledge) : undefined;
       return transaction(true, db => {
         const previous = checked(db, pageId, expected);
         requireStudioHuman(db,pageId,input.lease_token);
         const entry = db.prepare('SELECT snapshot FROM studio_revisions WHERE page_id=? AND revision=?').get(pageId, target);
         if (!entry) notFound('Revision');
         const old = JSON.parse(entry.snapshot);
-        const next = snapshot(db, previous, text(old.title, 'page title', 200), validateStudioDoc(old.doc), 'restore');
+        const title = text(old.title, 'page title', 200);
+        const currentDoc = JSON.parse(previous.doc), snapshotDoc = validateStudioDoc(old.doc);
+        const currentVersion = studioDocSchemaVersion(currentDoc), snapshotVersion = studioDocSchemaVersion(snapshotDoc);
+        // Restoring v1 content onto a v2 page upgrades the historical copy so the
+        // result keeps the v2 container; the stored v1 history snapshot is untouched.
+        const resultDoc = currentVersion === 2 && snapshotVersion === 1 ? upgradeStudioDoc(snapshotDoc) : snapshotDoc;
+        const diff = deriveStudioRestoreDiff({page_id: pageId, expected_revision: previous.revision, revision: target,
+          current_doc: currentDoc, snapshot_doc: snapshotDoc, result_doc: resultDoc});
+        if (studioRestoreNeedsAck(diff, currentVersion)) {
+          if (!acknowledge || !sameStudioRestoreDiff(acknowledge, diff)) {
+            throw Object.assign(new Error(STUDIO_RESTORE_ACK_MESSAGE),
+              {code: 'STUDIO_RESTORE_ACK_REQUIRED', restoreDiff: diff});
+          }
+        } else if (acknowledge) {
+          invalid('This restore is lossless; no acknowledgement is accepted.');
+        }
+        const next = persistDocChange(db, previous, title, resultDoc, 'restore',
+          {allow_upgrade: true, shape_removals: diff.removed_shape_item_ids});
         // Restore content only. Decisions remain final; pending proposals expire.
         stalePending(db, next, next.updated_at);
         return page(db, next);

@@ -3,7 +3,10 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 import { readGuide, GUIDE_TOPICS } from './guide.mjs';
-import { loadSdk, resolveConfig } from './sdk.mjs';
+import { loadSdk, resolveConfig, resolveAgentConfig } from './sdk.mjs';
+import { getConnectionDiagnostics } from './connection-diagnostics.mjs';
+import { snapshotAnalysisModel } from './analysis-model-selection.mjs';
+import { registerStudioLayoutEvidence } from './studio-layout-evidence.mjs';
 import { installScopePolicy } from './preset.mjs';
 import { waitForRun, WAIT_TOOL_TIMEOUT_MS } from './wait.mjs';
 import { createWorkbenchStore } from './workbench-store.mjs';
@@ -11,9 +14,10 @@ import { createStudioStore, studioProposalSelectors } from './studio-store.mjs';
 import {studioRequestAuthorization,registerStudioAuthorization} from './studio-authorization.mjs';
 import {registerStudioConsentAuthority} from './studio-consent-authority.mjs';
 import { createWorkbenchBridge, registerWorkbenchCommand } from './workbench-host.mjs';
+import { STUDIO_ANALYSIS_ACTIONS, validateStudioAnalysisInput, analysisServiceFor } from './studio-analysis-host.mjs';
 
 export const name = 'moss-draw-scope';
-export const inject = ['tools', 'systemPrompt', 'attachments', 'sessionProjections', 'commands'];
+export const inject = ['tools', 'systemPrompt', 'attachments', 'sessionProjections', 'commands', 'credentials'];
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 // Normalize only JSON omissions at the tool boundary. Never invoke getters or
 // toJSON, silently stringify classes, or turn corrupt numeric data into null.
@@ -41,22 +45,28 @@ export function losslessOutput(value) {
   }
   return copy(value);
 }
-const CONTEXT_SHAPES='MOSS_INPUT: limit means recent runs: integer 1..3 (default 3), alone or with run_id. Choose one shape: {} | {limit:1..3} | {studio_pages:true} | {studio_tasks:true} | {studio_consent:true} | {studio_page_id} (+ studio_status:true OR studio_inspect:true) | {documents:true} | {document_id} | {run_id}. Do not mix shapes; use studio_pages/documents to list pages, not a larger limit.';
+const CONTEXT_SHAPES='MOSS_INPUT: limit means recent runs: integer 1..3 (default 3), alone or with run_id. Choose one shape: {} | {connection:true} | {limit:1..3} | {lora_catalog:true} | {studio_pages:true} | {studio_tasks:true} | {studio_consent:true} | {studio_page_id} (+ studio_status:true OR studio_inspect:true) | {documents:true} | {document_id} | {run_id} | {analysis_id,analysis_detail?:boolean}. Do not mix shapes; use studio_pages/documents to list pages, not a larger limit.';
 function contextInput(){throw Object.assign(new Error(CONTEXT_SHAPES),{code:'MOSS_INPUT'});}
 function validateContextShape(args){
   const keys=Object.keys(args);
   if(!keys.length)return;
   if(keys.length===1&&Number.isSafeInteger(args.limit)&&args.limit>=1&&args.limit<=3)return;
-  if(['studio_pages','studio_tasks','studio_consent','documents'].some(key=>keys.length===1&&args[key]===true))return;
+  if(['connection','lora_catalog','studio_pages','studio_tasks','studio_consent','documents'].some(key=>keys.length===1&&args[key]===true))return;
+  if(typeof args.analysis_id==='string'&&keys.every(k=>['analysis_id','analysis_detail'].includes(k))&&(!Object.hasOwn(args,'analysis_detail')||typeof args.analysis_detail==='boolean'))return;
   if(keys.length===1&&typeof args.document_id==='string')return;
   if(typeof args.studio_page_id==='string'&&keys.every(k=>['studio_page_id','studio_status','studio_inspect'].includes(k))&&(!Object.hasOwn(args,'studio_status')||args.studio_status===true)&&(!Object.hasOwn(args,'studio_inspect')||args.studio_inspect===true)&&!(args.studio_status&&args.studio_inspect))return;
   if(typeof args.run_id==='string'&&keys.every(k=>['run_id','limit'].includes(k))&&(!Object.hasOwn(args,'limit')||Number.isSafeInteger(args.limit)&&args.limit>=1&&args.limit<=3))return;
   contextInput();
 }
-const safeCoreCodes = new Set(['INVALID_INPUT','MODEL_STYLE_MISMATCH','REQUEST_CONFLICT','RUN_NOT_FOUND','STORE_CORRUPT','LOCAL_ERROR','INVALID_CONFIG','UNSAFE_OUTPUT','RESPONSE_TOO_LARGE','INVALID_RESPONSE','REDIRECT_BLOCKED','NETWORK_UNKNOWN','HTTP_ERROR','INVALID_ARTIFACT','RECONCILE_AMBIGUOUS']);
+const safeCoreCodes = new Set(['INVALID_INPUT','MODEL_STYLE_MISMATCH','REQUEST_CONFLICT','RUN_NOT_FOUND','STORE_CORRUPT','LOCAL_ERROR','INVALID_CONFIG','UNSAFE_OUTPUT','RESPONSE_TOO_LARGE','INVALID_RESPONSE','REDIRECT_BLOCKED','NETWORK_UNKNOWN','HTTP_ERROR','INVALID_ARTIFACT','RECONCILE_AMBIGUOUS','BACKEND_CHANGED']);
 function safeError(error) {
+  if(error.code?.startsWith('STUDIO_ANALYSIS_')){
+    const messages={STUDIO_ANALYSIS_NO_CONFIG:'Configure the trusted analysis Python and runtime paths; no models are downloaded automatically.',STUDIO_ANALYSIS_UNKNOWN:'Outcome or proposal receipt is uncertain. Inspect the existing analysis/page; do not resubmit.',STUDIO_ANALYSIS_CONFLICT:'Analysis page, frozen revision, selection or receipt differs. Read the original analysis and page.',STUDIO_ANALYSIS_BUSY:'Another analysis owns this workspace. Inspect it; do not start a replacement.',STUDIO_ANALYSIS_LEASE_HELD:'The previous analysis process identity is uncertain. Maintenance must reconcile it; do not retry.'};
+    return `${error.code}: ${messages[error.code]??'Read the original analysis status; do not restart or auto-install the runtime.'}`;
+  }
   if(['STUDIO_EDIT_SCOPE','STUDIO_SHARED_PROTECTED','STUDIO_DESCRIPTION_CHECK'].includes(error.code))return `${error.code}: ${String(error.message).slice(0,500)}`;
   if(error.code?.startsWith('STUDIO_CONSENT_'))return `${error.code}: ${String(error.message).slice(0,500)}`;
+  if(error.code==='STUDIO_LAYOUT_REQUIRED')return 'STUDIO_LAYOUT_REQUIRED: Create or open a Layout page, edit its composition, then studioPrepare, inspect its frozen preview and studioExecute. Raw/Caption requires operator compatibility configuration.';
   if(error.code==='STUDIO_TEXT_ONLY')return 'STUDIO_TEXT_ONLY: This workbench request authorizes text editing only. Do not start/prepare/execute or use raw/another page to bypass it. A human must explicitly end text-only mode in the workbench.';
   if(error.code==='STUDIO_AUTHORIZATION_HISTORY')return 'STUDIO_AUTHORIZATION_HISTORY: Native session provenance could not be verified. Retry after the drawing plugin loads normally; do not create a page or reset a budget to bypass it.';
   if(error.code==='STUDIO_REGION_BINDING')return `${error.code}: ${String(error.message).slice(0,600)}`;
@@ -67,39 +77,41 @@ function safeError(error) {
   if (safeCoreCodes.has(error.code)) return `${error.code}: ${String(error.message).slice(0, 250)}`;
   return 'MOSS_OPERATION_FAILED: use the maintenance conversation; do not retry unknown';
 }
-const str = (description, required = false) => ({ type: 'string', description, ...(required ? { required: true } : {}) });
-const number = description => ({ type: 'number', description });
-const strings = (description, required = false) => ({ type: 'array', items: { type: 'string' }, description, ...(required ? { required: true } : {}) });
+const str = (description, required = false) => ({ type: 'string', ...(description && {description}), ...(required ? { required: true } : {}) });
+const number = description => ({ type: 'number', ...(description && {description}) });
+const strings = (description, required = false) => ({ type: 'array', items: { type: 'string' }, ...(description && {description}), ...(required ? { required: true } : {}) });
 const runParam = { run_id: str('This session run UUID.', true) };
 const loraProperties = { file: { type: 'string' }, strength: { type: 'number' }, trigger: { type: 'string' } };
 const loraList = description => ({ type: 'array', items: { type: 'object', additionalProperties: false, properties: loraProperties }, description });
 const compactStudio = value => !Array.isArray(value?.proposals)?value:{...value,proposals:value.proposals.map(p=>{const{proposal_id,status,summary,base_revision,submitted_revision,accepted}=p;return{proposal_id,status,summary,base_revision,submitted_revision,accepted,...(p.base_doc&&p.proposed_doc?{changed_selectors:studioProposalSelectors(p),proposed_kind:p.proposed_doc.kind}:{})};})};
-const characterProperties = { prompt: str('One character description.', true), style: { type: 'string', enum: ['none'] }, x: number('Normalized center x.'), y: number('Normalized center y.'), lora_strength: number('Must be 0; no style LoRA ships in this package.') };
+const characterProperties = { prompt: str('', true), style: { type: 'string', enum: ['none'] }, x: number('Normalized center x.'), y: number('Normalized center y.'), lora_strength: number('') };
 const regionProperties = {
-  id: str('Stable region label.'), box: { type:'array', items:{type:'integer'}, description:'Observed pixel [left,top,right,bottom]; right/bottom exclusive.' },
-  reference_index:{type:'integer',description:'Index in references; 0 is canvas, character starts at 1.'}, prompt:str('Region edit instruction.'),
-  style:{type:'string',enum:['none']},lora_strength:number('Must be 0; no built-in style LoRA ships here.'),loras:loraList('Stacked LoRAs: file/strength/trigger, max 4.'),seed:{type:'integer'},
-  context_px:{type:'integer'},feather_px:{type:'integer'},steps:{type:'integer'},cfg:number('Edit CFG.'),qwen_prompt:str('Optional subsequent local Qwen repair.')
+  id: str(''), box: { type:'array', items:{type:'integer'}, description:'Observed pixel [left,top,right,bottom]; right/bottom exclusive.' },
+  reference_index:{type:'integer',description:'Index in references; 0 is canvas, character starts at 1.'}, prompt:str(''),
+  style:{type:'string',enum: ['none']},lora_strength:number(''),loras:loraList('Stacked LoRAs: file/strength/trigger, max 4.'),seed:{type:'integer'},
+  context_px:{type:'integer'},feather_px:{type:'integer'},steps:{type:'integer'},cfg:number(''),qwen_prompt:str('Optional subsequent local Qwen repair.')
 };
-const WORKBENCH_AGENT_ACTIONS=['create','propose','materialize','importPlan','studioCreateSeries','studioCreatePage','studioPropose','studioResolve','studioStart','studioAgentUpdate','studioOpen','studioPrepare','studioExecute','studioRequestConsent','studioApplyConsent'];
+const WORKBENCH_AGENT_ACTIONS=['create','propose','materialize','importPlan','studioCreateSeries','studioCreatePage','studioPropose','studioResolve','studioStart','studioAgentUpdate','studioEdit','studioOpen','studioPrepare','studioExecute','studioRequestConsent','studioApplyConsent',...STUDIO_ANALYSIS_ACTIONS];
 const workbenchProperties = {
+  edit:{type:'object',additionalProperties:true,description:'studioEdit: {family,command}; studio 指南。'},
   action:{type:'string',enum:WORKBENCH_AGENT_ACTIONS},
   proposal_id:str(''),accept:strings(''),reject:{type:'boolean'},
-   consent_id:str('Saved conversation consent UUID; apply only.'),operations:{type:'object',additionalProperties:true,description:'完整五项：proposal/resume/exit_text_only/generation/continue_generation；例见studio。'},
-  descriptions_checked:{type:'boolean',description:'True after description updates with saved geometry unchanged; not generation consent.'},intent:str('studioStart intent'),mode:{type:'string',enum:['auto','review']},max_runs:{type:'integer'},request_key:str('Stable plan key.'),plan_id:str('Frozen Studio plan UUID.'),settings:{type:'object',additionalProperties:true,description:'Backend settings; saved-page prompt. Regions: Layout canvas + region_bindings.'},
-  series_id:str('Studio series UUID.'),page_id:str('Studio page UUID.'),doc_json:str('Full Doc JSON; caption≤12000 chars. Size: doc.layout, not workbench.canvas.'),
-  doc:{type:'object',additionalProperties:true,description:'Full Doc structure; alternative to doc_json, no stringifying.'},
-  document_id:str('Document UUID.'),expected_revision:{type:'integer'},run_id:str('Regional plan UUID to import.'),title:str('Document title.'),
+  analysis_id:str(''),analysis_detail:{type:'boolean'},detail:{type:'string',enum:['quick','balanced','detailed']},fit:{type:'string',enum:['contain','cover','stretch']},vertex_ids:strings('提案实体 ID。'),
+   consent_id:str(''),operations:{type:'object',additionalProperties:true,description:'完整五项：proposal/resume/exit_text_only/generation/continue_generation；例见studio。'},
+  descriptions_checked:{type:'boolean',description:'仅修改文案且几何不变时确认。'},intent:str(''),mode:{type:'string',enum:['auto','review']},max_runs:{type:'integer'},request_key:str(''),plan_id:str(''),settings:{type:'object',additionalProperties:true,description:'保存页的后端设置。regions 用 region_bindings；CFG 按底模默认。'},
+  series_id:str(''),page_id:str(''),doc_json:str('Full Doc JSON; size in layout.'),
+  doc:{type:'object',additionalProperties:true,description:'Doc 对象，与 doc_json 二选一。'},
+  document_id:str(''),expected_revision:{type:'integer'},run_id:str('Regional plan UUID to import.'),title:str(''),
   canvas:{type:'object',properties:{width:{type:'integer'},height:{type:'integer'},reference:str('Same as references[0].')},additionalProperties:false},
-  references:strings('Visible base PNG, then character images.'),regions:{type:'array',items:{type:'object',additionalProperties:true},description:'Region fields; optional body{x,y,z,width,height,depth,yaw}, group, locked.'},
-  prompt:str('Scene intent.'),qwen_full_prompt:str('Optional full Qwen.'),camera:{type:'object',additionalProperties:true,description:'orbit/pitch/roll/distance/fov/pan_x/pan_y/pan_z numeric fields.'},
-  patch:{type:'object',additionalProperties:true,description:'Proposal patch: prompt/camera/regions/title/qwen_full_prompt; host validates.'},summary:str('Only studioPropose/propose. Omit for studioAgentUpdate.')
+  references:strings('Visible base PNG, then character images.'),regions:{type:'array',items:{type:'object',additionalProperties:true},description:'Region fields in guide.'},
+  prompt:str(''),qwen_full_prompt:str(''),camera:{type:'object',additionalProperties:true,description:'Camera parameters in guide.'},
+  patch:{type:'object',additionalProperties:true,description:'See workbench guide.'},summary:str('仅用于提案或编辑审查。')
 };
 const schemas = {
   art_guide: { topic: { type: 'string', enum: [...GUIDE_TOPICS] }, offset: { type: 'integer' }, limit: { type: 'integer', description: 'At most 9000 characters.' } },
-  art_context: { studio_consent:{type:'boolean',description:'单独传true。'},studio_tasks:{type:'boolean',description:'仅{studio_tasks:true}；不混其他字段。'},studio_inspect:{type:'boolean',description:'只搭配studio_page_id，不混status。'},studio_status:{type:'boolean',description:'只搭配studio_page_id，不混inspect。'},studio_pages:{type:'boolean',description:'单独传true。'},studio_page_id:str('Studio page UUID.'),limit: { type: 'integer', description: 'Recent runs, default 3.' }, run_id: str('Optional run UUID for full prompt and brief.'), document_id:str('Workbench document UUID; returns its current content.'), documents:{type:'boolean',description:'List workbench documents instead of runs.'} },
+  art_context: { connection:{type:'boolean',description:'Alone: connection diagnostics; no generation.'}, lora_catalog:{type:'boolean',description:'Worker LoRA files, triggers and strengths.'},analysis_id:str('Session analysis UUID; do not mix other selectors.'),analysis_detail:{type:'boolean',description:'Bounded analysis details; only with analysis_id.'},studio_consent:{type:'boolean',description:'单独传true。'},studio_tasks:{type:'boolean',description:'仅{studio_tasks:true}；不混其他字段。'},studio_inspect:{type:'boolean',description:'只搭配studio_page_id，不混status。'},studio_status:{type:'boolean',description:'只搭配studio_page_id，不混inspect。'},studio_pages:{type:'boolean',description:'单独传true。'},studio_page_id:str(''),limit: { type: 'integer', description: 'Recent runs, default 3.' }, run_id: str('Optional run UUID for full prompt and brief.'), document_id:str('Workbench document UUID; returns its current content.'), documents:{type:'boolean',description:'List workbench documents instead of runs.'} },
   art_generate: {
-    backend: { type: 'string', enum: ['moss','k2','qwen'], description: 'Default moss. K2 text-to-image without style LoRA; Qwen edits references.' },
+    backend: { type: 'string', enum: ['moss','k2','qwen'], description: 'Default moss. K2 uses operator-provided LoRAs; Qwen edits references.' },
     mode: { type: 'string', enum: ['t2i','edit','inpaint','characters','regions','workbench'] },
     workbench:{type:'object',additionalProperties:false,properties:workbenchProperties,description:'仅{mode:"workbench",workbench:{...}}；不带外层request_id/prompt。动作字段见studio。'},
     references: strings('1..4 visible paths or run:<UUID>; regions: PNG canvas, then characters.'),
@@ -108,14 +120,14 @@ const schemas = {
     qwen_full_prompt:str('Optional whole-canvas Qwen pass; changes outside regions allowed.'),
     characters: { type: 'array', items: { type: 'object', additionalProperties: false, properties: characterProperties }, description: 'Moss characters mode: 1..2 character objects.' },
     request_id: str('仅原始生成；workbench/execute不传。'), prompt: str('原始prompt≤12000；workbench/execute不传。'),
-    negative: str('Optional negative prompt.'), style: { type: 'string', enum: ['none'] }, model: str('Model ID from art_context catalog.'),
-    width: { type: 'integer' }, height: { type: 'integer' }, steps: { type: 'integer' }, cfg: number('Backend/mode default from art_context.'), shift: number('Only if this backend/mode supports it.'),
+    negative: str(''), style: { type: 'string', enum: ['none'] }, model: str('Model ID from art_context catalog.'),
+    width: { type: 'integer' }, height: { type: 'integer' }, steps: { type: 'integer' }, cfg: number('Optional override; Moss t2i default 4.'), shift: number('Only if this backend/mode supports it.'),
     sampler: { type: 'string', description: 'T2i sampler; default euler.' },
     scheduler: { type: 'string', description: 'T2i scheduler; default sgm_uniform.' },
     seed: { type: 'integer' },
-    lora_strength: number('Only style none ships; must be 0.'), loras: loraList('Stacked caller LoRAs: file/strength/trigger, max 4; Qwen rejects them.'), brief: str('Short user intent.'), checks: strings('Visible acceptance items.'), parent_run_id: str('Optional prior UUID in this session.'),
+    lora_strength: number('Built-in style strength; see backend/mode catalog.'), loras: loraList('Stacked caller LoRAs: file/strength/trigger, max 4; Qwen rejects them.'), brief: str(''), checks: strings(''), parent_run_id: str('Optional prior UUID in this session.'),
   },
-  art_run: runParam,
+  art_run: {run_id:str('Session run UUID; exactly one of run_id or analysis_id.'),analysis_id:str('Session analysis UUID; wait without generation.')},
   art_review: { ...runParam, observations: strings('Observed pixels: up to 12 items, 500 chars each.', true), issues: strings('Visible issues: up to 12 items, 160 chars each.', true), next_change: str('One proposed change, max 500 chars; not user score.', true) },
   art_view: { studio_page_id:str('Studio blockout preview page UUID.'),expected_revision:{type:'integer'},run_id: str('This session run UUID; use exactly one selector.'), path: str('User-supplied workspace image or this session attachment host path.'), variant:{type:'string',enum:['result','preview']} },
   art_deliver: runParam,
@@ -144,6 +156,7 @@ function validate(name, args) {
   if(name==='art_generate'&&args.mode==='workbench') {
     const action=args.workbench?.action;if(['studioRequestConsent','studioApplyConsent'].includes(action)){const keys=action==='studioApplyConsent'?['action','consent_id']:['action','page_id','expected_revision','request_key','operations'];if(Object.keys(args.workbench).some(k=>!keys.includes(k)))fail('MOSS_INPUT');}
     if(Object.keys(args).some(k=>!['mode','workbench'].includes(k))||!args.workbench||typeof args.workbench!=='object'||Array.isArray(args.workbench)||!WORKBENCH_AGENT_ACTIONS.includes(args.workbench.action))fail('MOSS_INPUT');
+    if(STUDIO_ANALYSIS_ACTIONS.includes(action)){const {action:ignored,...input}=args.workbench;try{validateStudioAnalysisInput(action,input);}catch{fail('MOSS_INPUT');}}
     return;
   }
   if(name==='art_generate'&&args.workbench!==undefined)fail('MOSS_INPUT');
@@ -176,6 +189,8 @@ function validate(name, args) {
       }
     }
   }
+  if(name==='art_run'&&[args.run_id,args.analysis_id].filter(x=>x!==undefined).length!==1)fail('MOSS_INPUT');
+  if(args.analysis_id!==undefined){try{validateStudioAnalysisInput('studioAnalysisStatus',{analysis_id:args.analysis_id,...(args.analysis_detail===undefined?{}:{analysis_detail:args.analysis_detail})});}catch{fail('MOSS_INPUT');}}
   if (args.run_id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(args.run_id)) fail('MOSS_INPUT');
   if (args.plan_id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(args.plan_id)) fail('MOSS_INPUT');
   if (name === 'art_view' && ([args.run_id,args.path,args.studio_page_id].filter(x=>x!==undefined).length!==1 || args.variant!==undefined&&args.run_id===undefined || args.expected_revision!==undefined&&args.studio_page_id===undefined)) fail('MOSS_INPUT');
@@ -236,17 +251,19 @@ async function referencePath(input, exec, config, attachments) {
 
 // Per-native-session service boundaries prevent request_id collisions and prompt
 // discovery across independent drawing conversations. No cross-session scan.
-export function sessionServices(config, factory) {
+export function sessionServices(config, factory, {workingDirectory}={}) {
   const services = new Map();
   return exec => {
     const id = exec.agent?.id ?? exec.agent?.session.id;
     if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id)) fail('MOSS_SESSION_REQUIRED');
-    let entry = services.get(id);
+    const resolved=resolveAgentConfig(config,{session:exec.agent?.session,workingDirectory});
+    const key=JSON.stringify([id,resolved.dataRoot,resolved.comfyUrl]);
+    let entry = services.get(key);
     if (!entry) {
-      const dataRoot = path.join(config.dataRoot, 'sessions', id);
+      const dataRoot = path.join(resolved.dataRoot, 'sessions', id);
       // The generation ledger is per conversation; the workbench is per workspace.
-      entry = { service: factory({ dataRoot, comfyUrl: config.comfyUrl, workspaceRoot: config.workspaceRoot, ...(config.editEngine!==undefined?{editEngine:config.editEngine}:{}) }), dataRoot, studioRoot: config.dataRoot };
-      services.set(id, entry);
+      entry = {service:factory({dataRoot,comfyUrl:resolved.comfyUrl,workspaceRoot:resolved.workspaceRoot,editEngine:resolved.editEngine}),config:resolved,dataRoot,studioRoot:resolved.dataRoot,analysisRuntime:{python:resolved.analysisPython,configPath:resolved.analysisConfig}};
+      services.set(key, entry);
     }
     return entry;
   };
@@ -255,16 +272,28 @@ export function sessionServices(config, factory) {
 export function registerTools(ctx, { sdk, service, getService, readGuide: guide, config, attachments }) {
   const baseAuthorization=ctx.sessionProjections?registerStudioAuthorization(ctx.sessionProjections):studioRequestAuthorization;
   const consentAuthorization=ctx.sessionProjections?registerStudioConsentAuthority(ctx.sessionProjections):()=>{throw Object.assign(Error('Native consent projection is required.'),{code:'STUDIO_CONSENT_HISTORY'});};
-  const requestAuthorization=exec=>({...baseAuthorization(exec),...(ctx.sessionProjections?{consentEvidence:consentAuthorization(exec)}:{})});
+  const layoutEvidence=ctx.sessionProjections?registerStudioLayoutEvidence(ctx.sessionProjections):()=>undefined;
+  const requestAuthorization=exec=>({...baseAuthorization(exec),...(ctx.sessionProjections?{consentEvidence:consentAuthorization(exec),layoutEvidence:layoutEvidence(exec)}:{})});
   const assertGeneration=(entry,exec,input)=>{const authority=requestAuthorization(exec);return entry.studio.assertConsentGeneration?.({...input,message_id:authority.message_id??null},authority.consentEvidence);};
+  // CredentialRef is a branded string in the SDK; the runner validates the
+  // frozen config name. Resolve per operation, never cache or serialize values.
+  const resolveAnalysisCredential=ctx.credentials?ref=>ctx.credentials.resolve(ref):undefined;
   const pending = new WeakMap();
-  const localEntry={service,dataRoot:config.dataRoot}, workbenches=new Map();
+  const localEntry={service,dataRoot:config.dataRoot,config}, workbenches=new Map();
   const serviceFor = exec => {
-    const entry=getService?getService(exec):localEntry;entry.editEngine=config.editEngine??'native';
+    const entry=getService?getService(exec):localEntry,activeConfig=entry.config??config;entry.config=activeConfig;entry.editEngine=activeConfig.editEngine??'native';
+    entry.workflowMode=activeConfig.workflowMode??'compat';
+    entry.connectionIdentity=activeConfig.comfyUrl?new URL(activeConfig.comfyUrl).origin:undefined;
     // Pages, series and workbench documents are workspace artifacts: a new
     // conversation must reopen the same workbench. Only generation ledgers
     // (requests/runs/region pipelines) stay inside the per-session dataRoot.
-    entry.studioRoot=config.dataRoot;
+    entry.studioRoot=activeConfig.dataRoot;
+    entry.analysisRuntime={python:activeConfig.analysisPython,configPath:activeConfig.analysisConfig};
+    entry.resolveAnalysisCredential=resolveAnalysisCredential;
+    // Scoped services; the actual caller model is snapshotted per admission.
+    entry.attachments=attachments;
+    entry.llm=exec.agent?.ctx?.get?.('llm')??ctx.get?.('llm');
+    entry.logger=ctx.logger;
     if(!entry.workbench){if(!workbenches.has(entry.studioRoot))workbenches.set(entry.studioRoot,createWorkbenchStore({dataRoot:entry.studioRoot}));entry.workbench=workbenches.get(entry.studioRoot);}
     return entry;
   };
@@ -284,11 +313,24 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
     return { ...image, file, run_id: args.run_id, width: receipt.width, height: receipt.height };
   }
   async function resolvedImage(reference,exec){
-    const image=reference.startsWith('run:')?await artifact({run_id:reference.slice(4)},exec):await imageBytes(await referencePath(reference,exec,config,attachments));
+    const image=reference.startsWith('run:')?await artifact({run_id:reference.slice(4)},exec):await imageBytes(await referencePath(reference,exec,serviceFor(exec).config,attachments));
     const ref=await attachments.saveImage({data:image.data,mediaType:image.mediaType});
     const dims=ref.originalDimensions??ref;return{...image,width:image.width??dims.width,height:image.height??dims.height};
   }
-  const bridge=createWorkbenchBridge({getEntry:serviceFor,resolveReference:resolvedImage,readRunImage:artifact,requestAuthorization,consentAuthorization,
+  async function resolvedAnalysisImage(reference,exec){
+    if(typeof reference!=='string'||/^(?:https?:|data:|file:|blob:)/i.test(reference))fail('MOSS_IMAGE_NOT_VISIBLE');
+    let image;
+    if(reference.startsWith('run:')){const selector={run_id:reference.slice(4)};validate('art_run',selector);image=await artifact(selector,exec);}
+    else image=await imageBytes(await referencePath(reference,exec,serviceFor(exec).config,attachments));
+    if(!['image/png','image/jpeg','image/webp'].includes(image.mediaType))fail('MOSS_IMAGE_FORMAT');
+    exec.signal?.throwIfAborted();
+    const ref=await attachments.saveImage({data:image.data,mediaType:image.mediaType});
+    const stored=await attachments.readImage(ref,exec.signal);exec.signal?.throwIfAborted();
+    if(!(stored?.data instanceof Uint8Array)||!['image/png','image/jpeg','image/webp'].includes(stored.ref?.mediaType))fail('MOSS_IMAGE_FORMAT');
+    const bytes=Buffer.from(stored.data);
+    return{bytes,sha256:createHash('sha256').update(bytes).digest('hex'),width:stored.ref.width,height:stored.ref.height,mime:stored.ref.mediaType};
+  }
+  const bridge=createWorkbenchBridge({getEntry:serviceFor,resolveReference:resolvedImage,resolveAnalysisReference:resolvedAnalysisImage,readRunImage:artifact,requestAuthorization,consentAuthorization,analysisModelSelection:snapshotAnalysisModel,
     previewImage:async(image,exec)=>{
       const ref=await attachments.saveImage({data:image.data,mediaType:image.mediaType});
       const size=Math.min(1,768/Math.max(ref.width,ref.height));
@@ -305,8 +347,10 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
     }});
   if(ctx.commands)registerWorkbenchCommand(ctx,{bridge});
   const definitions = [
-    ['art_guide', 'Read this private drawing guide by topic; start with quick. No global skills.', args => guide(args)],
-    ['art_context', 'Read session runs/catalog or editor documents. No cross-session scan.', async (args, exec) => {
+    ['art_guide', 'Read drawing guides by topic; start with quick. Layout is the default; setup covers trusted local/remote connections.', args => guide(args)],
+    ['art_context', 'Read session runs/analyses, editor documents, or the worker LoRA catalog ({lora_catalog:true}: files + trigger words + strengths). No cross-session scan.', async (args, exec) => {
+      if(args.connection)return getConnectionDiagnostics(serviceFor(exec).config,{signal:exec.signal});
+      if(args.analysis_id!==undefined)return bridge({action:'studioAnalysisStatus',...args},exec,'agent');
       if(args.studio_consent)return bridge({action:'studioConsentState'},exec,'agent');
       if(args.studio_pages)return bridge({action:'studioState'},exec,'agent');
       if(args.studio_tasks)return bridge({action:'studioTaskState'},exec,'agent');
@@ -315,9 +359,20 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
       if(args.documents)return serviceFor(exec).workbench.list({});
       const {documents,...query}=args;return serviceFor(exec).service.context(query);
     }],
-    ['art_generate', 'Generate an image/region plan, or edit workbench drafts. Stable request_id; never retry unknown.', async (args, exec) => {
-      if(args.mode==='workbench'){const value=await bridge(args.workbench,exec,'agent');return args.workbench.action.startsWith('studio')?compactStudio(value):value;}
-      const entry=serviceFor(exec);entry.studio??=createStudioStore({dataRoot:entry.dataRoot});await assertGeneration(entry,exec,{backend:args.backend??'moss',action:'raw'});
+    ['art_generate', 'Default: design/edit Layout, prepare frozen preview, then execute. Analyze references via GBC. Never retry unknown.', async (args, exec) => {
+      if(args.mode==='workbench'){
+        const value=await bridge(args.workbench,exec,'agent');
+        if(args.workbench.action==='studioPrepare'&&value?.data_url){
+          const {data_url,...rest}=value,clean=compactStudio(rest);
+          if(!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data_url))fail('MOSS_IMAGE_FORMAT');
+          const ref=await attachments.saveImage({data:Buffer.from(data_url.split(',')[1],'base64'),mediaType:'image/png'});
+          pending.set(exec,[{type:'text',text:JSON.stringify(clean)},{type:'image',attachment:ref}]);return clean;
+        }
+        return args.workbench.action.startsWith('studio')?compactStudio(value):value;
+      }
+      const entry=serviceFor(exec);
+      if(entry.workflowMode==='layout'&&!['edit','inpaint','regions'].includes(args.mode??'t2i'))fail('STUDIO_LAYOUT_REQUIRED');
+      entry.studio??=createStudioStore({dataRoot:entry.studioRoot,workflowMode:entry.workflowMode,connectionIdentity:entry.connectionIdentity});await assertGeneration(entry,exec,{backend:args.backend??'moss',action:'raw'});
        const activeTasks=await bridge({action:'studioTaskState'},exec,'agent');if(activeTasks.editing_only)fail('STUDIO_TEXT_ONLY');
        if(activeTasks.tasks.some(row=>row.binding_active!==false))fail('STUDIO_TASK_BINDING_REQUIRED');
       const { references, ...input } = args, assets = [];
@@ -327,7 +382,7 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
           const selector = { run_id: reference.slice(4) };
           validate('art_run', selector);
           image = await artifact(selector, exec);
-        } else image = await imageBytes(await referencePath(reference, exec, config, attachments));
+        } else image = await imageBytes(await referencePath(reference, exec, serviceFor(exec).config, attachments));
         if (!['image/png','image/jpeg','image/webp'].includes(image.mediaType)) fail('MOSS_IMAGE_FORMAT');
         const decoded = await attachments.saveImage({ data: image.data, mediaType: image.mediaType });
         const dimensions = decoded.originalDimensions ?? decoded;
@@ -339,8 +394,9 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
       const result = await entry.service.generate(input, assets, {signal:exec.signal});
       return { ...result, next_action: result.status==='draft' ? 'Inspect art_view(run_id, variant="preview"); after checking layout, execute this plan under the existing user authorization. If user requested approval, present preview and wait. Do not art_run a draft.' : 'Call art_run once for this run_id; it waits internally. Then inspect, review and deliver in the same turn without a continuation request.' };
     }],
-    ['art_run', 'Wait internally for the original run (up to 30 min), collect when ready. Call once, not rapid polling. Never resubmit.', async (args, exec) => {
-      const entry=serviceFor(exec);entry.studio??=createStudioStore({dataRoot:entry.dataRoot});
+    ['art_run', 'Wait for the original run (up to 30 min) or analysis (30s). Call once, not rapid polling. Never resubmit.', async (args, exec) => {
+      if(args.analysis_id!==undefined)return analysisServiceFor(serviceFor(exec)).wait({analysisId:args.analysis_id.toLowerCase()},{signal:exec.signal});
+      const entry=serviceFor(exec);entry.studio??=createStudioStore({dataRoot:entry.studioRoot,workflowMode:entry.workflowMode,connectionIdentity:entry.connectionIdentity});
       return waitForRun({run:async(input,options)=>{
         const binding=await entry.studio.boundRun(input);
         if(binding?.settlement?.kind==='human_abandoned')return{run_id:input.run_id,status:'abandoned',settlement:binding.settlement,next_action:'This unresolved result was explicitly abandoned by a human; do not advance, re-submit or refund it. Read the page for review and new-request requirements.'};
@@ -359,10 +415,10 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
         return result;
       }},args,{signal:exec.signal});
     }],
-    ['art_review', 'Save AI pixel observations/issues and one next change; never user score or acceptance.', async (args, exec) => {const entry=serviceFor(exec),result=await entry.service.review(args);entry.studio??=createStudioStore({dataRoot:entry.dataRoot});const binding=await entry.studio.boundRun({run_id:args.run_id});if(binding?.status==='succeeded')await entry.studio.notePlan({plan_id:binding.plan_id,stage:'reviewed'});return result;}],
+    ['art_review', 'Save AI pixel observations/issues and one next change; never user score or acceptance.', async (args, exec) => {const entry=serviceFor(exec),result=await entry.service.review(args);entry.studio??=createStudioStore({dataRoot:entry.studioRoot,workflowMode:entry.workflowMode,connectionIdentity:entry.connectionIdentity});const binding=await entry.studio.boundRun({run_id:args.run_id});if(binding?.status==='succeeded')await entry.studio.notePlan({plan_id:binding.plan_id,stage:'reviewed'});return result;}],
     ['art_view', 'Attach real pixels from a run or user-provided visible reference. No arbitrary file reads.', async (args, exec) => {
       if(args.studio_page_id){const preview=await bridge({action:'studioPreview',page_id:args.studio_page_id,...(args.expected_revision===undefined?{}:{expected_revision:args.expected_revision})},exec,'agent');const {data_url,...value}=preview;const ref=await attachments.saveImage({data:Buffer.from(data_url.split(',')[1],'base64'),mediaType:'image/png'});pending.set(exec,[{type:'text',text:JSON.stringify(value)},{type:'image',attachment:ref}]);return value;}
-      const image = args.run_id ? await artifact(args, exec) : await imageBytes(await referencePath(args.path, exec, config, attachments));
+      const image = args.run_id ? await artifact(args, exec) : await imageBytes(await referencePath(args.path, exec, serviceFor(exec).config, attachments));
       const ref = await attachments.saveImage({ data: image.data, mediaType: image.mediaType });
       const value = { ...(image.run_id ? { run_id: image.run_id } : {}), sha256: image.sha256, width: image.width ?? ref.width, height: image.height ?? ref.height, visual_review: 'not_yet_performed' };
       pending.set(exec, [{ type: 'text', text: JSON.stringify(value) }, { type: 'image', attachment: ref }]);
@@ -370,7 +426,7 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
     }],
     ['art_deliver', 'Deliver exact original generated bytes with a normalized image preview.', async (args, exec) => {
       const image = await artifact(args, exec);
-      const entry=serviceFor(exec);entry.studio??=createStudioStore({dataRoot:entry.dataRoot});const binding=await entry.studio.boundRun({run_id:args.run_id});
+      const entry=serviceFor(exec);entry.studio??=createStudioStore({dataRoot:entry.studioRoot,workflowMode:entry.workflowMode,connectionIdentity:entry.connectionIdentity});const binding=await entry.studio.boundRun({run_id:args.run_id});
       const preview = await attachments.saveImage({ data: image.data, mediaType: image.mediaType });
       const file = await attachments.saveFile({ data: image.data, name: `moss-${args.run_id}.png` });
       const linkPath = image.file.replaceAll('\\', '/');
@@ -391,7 +447,7 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
       exec.signal?.throwIfAborted();
       validate(name, args);
       try { return losslessOutput(await execute(args, exec)); }
-      catch (error) { exec.signal?.throwIfAborted(); if (error?.name === 'AbortError') throw error; throw new Error(safeError(error)); }
+      catch (error) { exec.signal?.throwIfAborted(); if (error?.name === 'AbortError') throw error; const safe=new Error(safeError(error));if(/^STUDIO_ANALYSIS_[A-Z0-9_]+$/.test(error.code??''))safe.code=error.code;throw safe; }
     },
     projectContent: (exec, result) => result.isError ? undefined : pending.get(exec),
   }));
@@ -399,7 +455,7 @@ export function registerTools(ctx, { sdk, service, getService, readGuide: guide,
 
 export async function apply(ctx, input) {
   const { createDrawingService } = await import('./dispatcher.mjs');
-  const config = resolveConfig(input), sdk = loadSdk();
-  registerTools(ctx, { sdk, getService: sessionServices(config, createDrawingService), readGuide, config, attachments: ctx.attachments });
+  const config = resolveConfig(input), sdk = await loadSdk();
+  registerTools(ctx, { sdk, getService: sessionServices(config, createDrawingService,{workingDirectory:ctx.get?.('workingDirectory')}), readGuide, config, attachments: ctx.attachments });
   installScopePolicy(ctx, { sdk });
 }

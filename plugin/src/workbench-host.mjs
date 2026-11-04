@@ -6,6 +6,8 @@ import {fault,strictObject,runId,number,text} from './catalog.mjs';
 import {decodePng} from './region-pixels.mjs';
 import {projectLayout,cameraDescription,validateCamera,DEFAULT_CAMERA} from './workbench-camera.mjs';
 import {isStudioAction,handleStudioAction} from './studio-host.mjs';
+import {encodeStudioRestoreAckError} from './studio-restore-contract.mjs';
+import {STUDIO_ANALYSIS_ACTIONS,validateStudioAnalysisInput} from './studio-analysis-host.mjs';
 import {studioRequestAuthorization} from './studio-authorization.mjs';
 
 const REGION_FIELDS=['id','box','reference_index','prompt','style','lora_strength','loras','seed','context_px','feather_px','qwen_prompt','steps','cfg'];
@@ -55,11 +57,14 @@ async function frozenAssets(entry,document){
 
 // Transport-independent, exact-session bridge. Adapters must admit references
 // before they enter this module; persisted documents never authorize new paths.
-export function createWorkbenchBridge({getEntry,resolveReference,readRunImage,previewImage,inspectPlan,requestAuthorization=studioRequestAuthorization,consentAuthorization}){
+export function createWorkbenchBridge({getEntry,resolveReference,resolveAnalysisReference,readRunImage,previewImage,inspectPlan,requestAuthorization=studioRequestAuthorization,consentAuthorization,analysisModelSelection}){
   return async function bridge(request,exec,actor='ui'){
     exec.signal?.throwIfAborted();if(!request||typeof request!=='object'||Array.isArray(request))invalid();
-    const {action,...args}=request;const entry=getEntry(exec),store=entry.workbench;
-    if(isStudioAction(action))return handleStudioAction(entry,action,args,exec.signal,{actor,session_id:exec.agent?.session?.id??exec.agent?.id,readAuthorization:()=>requestAuthorization(exec),resolveReference:ref=>resolveReference(ref,exec),authorization:actor==='agent'&&['studioStart','studioPrepare','studioExecute','studioRequestConsent'].includes(action)?await requestAuthorization(exec):undefined,consentEvidence:actor==='agent'&&action==='studioApplyConsent'?await consentAuthorization?.(exec):undefined});
+    const {action,...args}=request;
+    const modelSelection=action==='studioAnalyzeReference'?analysisModelSelection?.(exec):undefined;
+    if(STUDIO_ANALYSIS_ACTIONS.includes(action))validateStudioAnalysisInput(action,args);
+    const entry=getEntry(exec),store=entry.workbench;
+    if(isStudioAction(action))return handleStudioAction(entry,action,args,exec.signal,{actor,modelSelection,session_id:exec.agent?.session?.id??exec.agent?.id,readAuthorization:()=>requestAuthorization(exec),resolveReference:ref=>resolveReference(ref,exec),resolveAnalysisReference:resolveAnalysisReference?ref=>resolveAnalysisReference(ref,exec):undefined,authorization:actor==='agent'&&['studioStart','studioPrepare','studioExecute','studioRequestConsent'].includes(action)?await requestAuthorization(exec):undefined,consentEvidence:actor==='agent'&&action==='studioApplyConsent'?await consentAuthorization?.(exec):undefined});
     if(action==='state'){strictObject(args,[]);const [state,context]=await Promise.all([store.list({}),entry.service.context({})]);return{...state,runs:context.runs};}
     if(STORE_ACTIONS.has(action))return store[action](args);
     if(action==='create'){
@@ -98,5 +103,13 @@ export function createWorkbenchBridge({getEntry,resolveReference,readRunImage,pr
 }
 export function registerWorkbenchCommand(ctx,{bridge}){
   return ctx.commands.register({definitionId:'moss-draw.workbench',name:'art-workbench',description:'Inspect and adjust this drawing session workbench; does not execute GPU tasks.',input:{hint:'JSON workbench action'},recordInput:false,
-    handler:async exec=>{try{if(typeof exec.rawInput!=='string'||exec.rawInput.length>1572864)invalid();let request;try{request=JSON.parse(exec.rawInput);}catch{invalid();}const result=await bridge(request,exec);return{kind:'success',text:JSON.stringify(result)};}catch(e){exec.signal?.throwIfAborted();const code=/^(WORKBENCH|MOSS|STUDIO)_[A-Z0-9_]+$/.test(e.code??'')||e.code==='INVALID_INPUT'?e.code:'WORKBENCH_OPERATION_FAILED';return{kind:'error',text:code};}}});
+    handler:async exec=>{let request;try{if(typeof exec.rawInput!=='string'||exec.rawInput.length>1572864)invalid();try{request=JSON.parse(exec.rawInput);}catch{invalid();}const result=await bridge(request,exec);return{kind:'success',text:JSON.stringify(result)};}catch(e){exec.signal?.throwIfAborted();const code=/^(WORKBENCH|MOSS|STUDIO)_[A-Z0-9_]+$/.test(e.code??'')||e.code==='INVALID_INPUT'?e.code:'WORKBENCH_OPERATION_FAILED';
+      // One structured error only: a restore acknowledgement carries exactly the
+      // Host-derived, whitelisted diff. Everything else (and any encoding failure)
+      // stays code-only so no message, detail or path can leak through the command.
+      if(request?.action==='studioRestore'&&code==='STUDIO_RESTORE_ACK_REQUIRED'){
+        const text=encodeStudioRestoreAckError(e.restoreDiff);
+        if(text)return{kind:'error',text};
+      }
+      return{kind:'error',text:code};}}});
 }

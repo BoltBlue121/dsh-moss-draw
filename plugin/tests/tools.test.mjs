@@ -253,7 +253,7 @@ test('known core validation errors stay actionable without exposing unknown erro
 test('session services isolate attempts and context roots without accepting path-like session IDs', async () => {
   const { sessionServices } = await subject();
   const roots = [];
-  const get = sessionServices({ dataRoot: path.join(os.tmpdir(), 'moss-data'), comfyUrl: 'http://localhost:8188' }, options => { roots.push(options.dataRoot); return { root: options.dataRoot }; });
+  const get = sessionServices({ workspaceRoot:os.tmpdir(),dataRoot: path.join(os.tmpdir(), 'moss-data'), comfyUrl: 'http://localhost:8188' }, options => { roots.push(options.dataRoot); return { root: options.dataRoot }; });
   const a = get({ agent: { id: 'session-a' } }), b = get({ agent: { id: 'session-b' } });
   assert.notEqual(a.dataRoot, b.dataRoot);
   assert.equal(get({ agent: { id: 'session-a' } }), a);
@@ -264,7 +264,7 @@ test('session services isolate attempts and context roots without accepting path
 test('a new conversation reopens the same workbench while generation ledgers stay per session', async () => {
   const { sessionServices } = await subject();
   const dataRoot = path.join(os.tmpdir(), 'moss-shared-workbench');
-  const get = sessionServices({ dataRoot, comfyUrl: 'http://localhost:8188' }, options => ({ root: options.dataRoot }));
+  const get = sessionServices({ workspaceRoot:os.tmpdir(),dataRoot, comfyUrl: 'http://localhost:8188' }, options => ({ root: options.dataRoot }));
   const first = get({ agent: { id: 'session-first' } }), second = get({ agent: { id: 'session-second' } });
   // Pages, series and workbench documents are workspace artifacts: opening a new
   // conversation must land in the same studio instead of an empty one.

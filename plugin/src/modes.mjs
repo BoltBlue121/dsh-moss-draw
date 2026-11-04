@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
-import { MODELS, STYLES, LIMITS, fault, strictObject, text, number, strings, runId, parseLoras, loraPrefix } from './catalog.mjs';
+import { MODELS, CHARACTER_MODELS, STYLES, LIMITS, fault, strictObject, text, number, strings, runId, parseLoras, loraPrefix } from './catalog.mjs';
 import { validatePng } from './comfy.mjs';
 import { compileGraph } from './core.mjs';
 
@@ -97,7 +97,7 @@ export function normalizeMode(input, assets) {
     invalid(`Sampler and scheduler are moss t2i only; ${mode} is fixed at sampler=${fixed[0]}, scheduler=${fixed[1]}. Drop both fields, or use mode t2i to test samplers.`);
   }
   const model = pick(input, 'model', 'sft');
-  if (typeof model !== 'string' || !Object.hasOwn(MODELS, model) || (mode !== 'characters' && model !== 'sft')) invalid('This mode requires model sft.');
+  if (mode === 'characters' ? !CHARACTER_MODELS.includes(model) : model !== 'sft') invalid('This mode requires a supported Base/SFT model.');
   const style = pick(input, 'style', 'none');
   if (typeof style !== 'string' || !Object.hasOwn(STYLES, style)) invalid('Unknown style.');
   const lora_strength = number(pick(input, 'lora_strength', style === 'none' ? 0 : 1), 'style strength', 0, 2);

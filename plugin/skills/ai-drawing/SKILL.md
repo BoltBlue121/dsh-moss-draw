@@ -9,7 +9,7 @@ description: Use when drawing with MOSS/K2, editing with Qwen, or reviewing refe
 
 ## 本包边界：不附带画风 LoRA
 
-本便携包**不附带任何画风 LoRA**。Moss 的 t2i/edit/characters/regions 与 K2 都是无 LoRA 直出：所有模式 style 只能 `none`、`lora_strength` 必须 0，没有画风触发词。想要固定画风，就在英文正文里写清媒介、笔触、光色与材质；部署方要接自己的画风 LoRA 属于二次开发（改注册表、模板与资产），不在本包支持范围。模型权重、凭据与用户作品同样不在包内。
+内置 style 只有 none，lora_strength 为 0。部署者自备的文件可通过 loras 数组显式叠加，最多四个。Qwen 不支持此数组。
 
 本插件没有自带聊天渠道或 key：原生模型栏由部署方选一个本机已配置的、能看图的模型渠道。
 
@@ -56,3 +56,5 @@ studio_pages/studio_tasks→新建或复用页→studioStart→studioAgentUpdate
 ```
 
 技术成功≠视觉合格；Moeblack原文按需分页，next_offset非null才续读。
+
+新文生图先建立可编辑 Layout。用 studioCreateSeries/studioCreatePage 创建真实页，studioStart 开任务，studioEdit 编辑分镜、气泡、草图与人偶。人工接管或暂停后只按当前控制权和修订继续。studioPrepare 冻结当前版并检查原生预览，Host 验证回执后才执行。参考图结构识别按需读 analysis。旧任务丢回执只对账，不能重投。便携包 Base/SFT 默认 50 步、CFG 3。Heal 作者示例为 16 步、CFG 3、shift 5、种子 0，使用 Euler 官方训练网格。用户显式参数优先。

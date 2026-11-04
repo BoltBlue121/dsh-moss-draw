@@ -1,7 +1,8 @@
-// Browser-local editing preferences only; no accounts or model configuration.
+import {T2I_MODELS} from '../src/catalog.mjs';
+// Browser-local choices are shared with the task on manual handoff.
 const KEY='moss-studio:editing-preferences:v1';
 export function loadStudioPreferences(storage){
- try{storage??=globalThis.localStorage;const p=JSON.parse(storage?.getItem(KEY)??'{}');return{prefix:typeof p.prefix==='string'?p.prefix.slice(0,12000):'',negative:typeof p.negative==='string'?p.negative.slice(0,12000):'',autoCompile:p.autoCompile!==false};}
+ try{storage??=globalThis.localStorage;const p=JSON.parse(storage?.getItem(KEY)??'{}');return{...(p.negative_custom===true?{negative_custom:true}:{}),...(T2I_MODELS.includes(p.t2i_model)?{t2i_model:p.t2i_model}:{}),prefix:typeof p.prefix==='string'?p.prefix.slice(0,12000):'',negative:typeof p.negative==='string'?p.negative.slice(0,12000):'',autoCompile:p.autoCompile!==false};}
  catch{return{prefix:'',negative:'',autoCompile:true};}
 }
 export function saveStudioPreferences(p,storage){try{storage??=globalThis.localStorage;storage?.setItem(KEY,JSON.stringify(p));}catch{/* Session memory remains usable if browser storage is unavailable. */}}

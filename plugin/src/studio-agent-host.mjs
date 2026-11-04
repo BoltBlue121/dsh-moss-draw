@@ -62,7 +62,8 @@ export async function handleStudioAgentAction(entry,action,args,signal,options){
   const authorization=options.readAuthorization?await options.readAuthorization():options.authorization;
    const plan=await store.preparePlan({...parameters,assets:metadata},assets,entry.editEngine??'native',authorization);
   for(let i=0;i<checked.length;i++)await atomicWrite(path.join(entry.studioRoot??entry.dataRoot,'studio','plan-assets',plan.plan_id,`${i}.bin`),checked[i].data);
-  return plan;
+  if(plan.execution_contract==='layout-preview-v1'){const {data}=renderStudioPreview(plan.doc);return{...plan,data_url:`data:image/png;base64,${data.toString('base64')}`,preview_binding:{plan_id:plan.plan_id,digest:plan.digest,page_id:plan.page_id,page_revision:plan.page_revision}};}
+   return plan;
  }
  if(action==='studioExecute'){
   strictObject(args,['plan_id']);const existing=await store.getPlan(args);

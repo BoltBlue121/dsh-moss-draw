@@ -52,3 +52,5 @@ studioPrepare只冻结计划，不花GPU。提交studioExecute之前核对plan.r
 GPU执行成功、框外像素保护与画面合格是三件事。native Edit与regions的多参考画面质量仍属**quality experimental**：技术成功不等于角色保真，可能重复主体、出现接缝；必须逐图验收，不能宣传身份保真或“接缝已解决”，也不能偷偷退成t2i或风格参考图冒充。审图检查改动处、保留部位、数量与接缝；整图Qwen须单独授权且放弃框外逐像素不变。真机画质与多人/多参考一致性仍需逐图验收。
 
 本包内画风只有none，不存在“prompt写名字就加载画风”的通道；若部署方自行接入画风LoRA，其效果与验收由部署方负责。
+
+便携包的 Base/SFT 文生图沿用 50 步、CFG 3；Heal 使用作者示例的 16 步、CFG 3。 Heal 采用 KohakuMoss 官方 Euler 网格，配置详见 studio 与 art_context 的 model_sources。

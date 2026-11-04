@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "AI Drawing Workbench",
+    "description": "Layout-first drawing preset, seven tools and native workbench for your local or remote ComfyUI, with optional GBC/Togeari analysis. Runtime and models are configured separately."
+  }
+}

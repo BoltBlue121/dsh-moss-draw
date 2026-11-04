@@ -20,7 +20,7 @@ export function createStudioTaskView(React){
    h('small',{className:'mps-muted'},`已占用 ${task.claimed_runs}/${task.max_runs} 次生成 · 当前稿 r${state.page.revision}`),
    h('div',{className:'mps-button-row'},h('button',{type:'button',disabled:busy,onClick:()=>act(()=>model.takeControl())},'接管微调'),h('button',{type:'button',disabled:busy||task.control==='paused',onClick:()=>act(()=>model.pauseTask())},'暂停自动推进'),h('button',{type:'button',disabled:busy||task.control==='auto',onClick:()=>act(()=>model.continueTask())},'保存当前稿并继续')),
    h('button',{type:'button',disabled:busy||task.max_runs>=20,onClick:()=>{if(globalThis.confirm?.(`增加1次GPU child预算（总预算 ${task.max_runs+1}），保存当前稿并交给Agent继续？regions多阶段可能仍需更多次数。`))act(()=>model.continueTask(task.max_runs+1));}},'授权再生成一次并继续'),
-   state.continuePending&&state.continuePageId===state.page.page_id?h('button',{type:'button',disabled:busy,onClick:()=>act(()=>model.retryContinue())},'重发继续指令（不追加预算）'):null,
+   state.continuePending&&state.continuePageId===state.page.page_id?h('button',{type:'button',disabled:busy,title:`重新通知 Agent 继续已交还的 r${state.page.revision} 稿件`,onClick:()=>act(()=>model.retryContinue())},'重发继续指令（不追加预算）'):null,
    task.control==='manual'?h('button',{type:'button',disabled:busy,onClick:()=>{if(globalThis.confirm?.('取代其他窗口的编辑控制？其未保存稿不会自动覆盖本页。'))act(()=>model.takeControl(true));}},'从其他窗口接管'):null,
    h('p',{className:'mps-muted'},state.controlPending?'正在取得编辑控制，修改会在成功后应用。':'查看不会打断；开始修改会先取得人工控制。已提交生成不会因暂停而取消。'),
    notice||state.taskSyncError?h('p',{role:'status'},notice||state.taskSyncError):null,

@@ -1,4 +1,5 @@
 import { projectStudioLayout, studioCameraFrame } from './studio-camera.mjs';
+import { studioDocSchemaVersion } from './studio-doc-version.mjs';
 
 const RELATION_LIMIT = 64;
 const invalid = message => { throw Object.assign(new TypeError(message), { code: 'STUDIO_INVALID_INPUT' }); };
@@ -16,13 +17,20 @@ export function studioGeometryKey(doc) {
   if (!doc || !doc.layout) invalid('Expected a Studio document.');
   const layout = doc.layout;
   studioCameraFrame(layout); // Shared geometry validation, without projection singularities or writes.
-  return JSON.stringify(canonical({
+  const version = studioDocSchemaVersion(doc);
+  // v1 output stays byte-identical. v2 adds its version marker and the optional item shape;
+  // ring winding/start are part of the array, so those edits change the key as well.
+  const itemKeys = ['id', 'label', 'bbox', 'body', 'hidden', 'depth'];
+  if (version === 2) itemKeys.push('shape','role','rig','attachment','bubble','sketch');
+  const snapshot = {
     kind: doc.kind ?? 'layout',
     layout: {
       ...take(layout, ['width', 'height', 'bbox_coord_space', 'bbox_format', 'camera', 'perspective']),
-      items: layout.items.map(item => take(item, ['id', 'label', 'bbox', 'body', 'hidden', 'depth'])),
+      items: layout.items.map(item => take(item, itemKeys)),
     },
-  }));
+  };
+  if (version === 2) snapshot.schema_version = 2;
+  return JSON.stringify(canonical(snapshot));
 }
 
 /** Bounded projected-box summary. These are composition proxies, never semantic shape occlusions. */

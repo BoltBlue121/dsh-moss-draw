@@ -11,9 +11,9 @@ test('package is an additive pinned Desktop bundle with no install scripts or co
  assert.equal(pkg.peerDependencies['@deepseek-ai/dsh-agent-preset-registry'],'0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.5');
  assert.equal(pkg.dependencies,undefined);
  for(const key of ['preinstall','install','postinstall','prepare'])assert.equal(pkg.scripts?.[key],undefined);
- assert.deepEqual(pkg.files,['host.mjs','src/','client/lib/','skills/','templates/','worker/moss-draw-style/*.py','worker/README.md','cordis.patch.yml','README.md','LICENSE']);
- assert.equal(pkg.version,'0.8.0');
- assert.equal(pkg.license,'MIT');
+ assert.deepEqual(pkg.files,["host.mjs","src/","client/lib/","skills/","vendor/","templates/","worker/moss-draw-style/*.py","worker/README.md","worker/gbc/bridge.py","worker/gbc/runtime.py","worker/gbc/requirements.lock.txt","worker/gbc/build-requirements.lock.txt","scripts/setup-gbc.ps1","scripts/check-connection.mjs","scripts/lora-registry.mjs","docs/gbc-runtime.md","docs/plugin-maintenance.md","docs/agent-setup.md","docs/privacy-and-security.md","config/examples/*.json","LICENSE","THIRD_PARTY_NOTICES.md","CHANGELOG.md","locale/*.json","locale/query/*.json","icon.svg","cordis.patch.yml","README.md"]);
+ assert.equal(pkg.version,'0.9.0');
+ assert.equal(pkg.license,'(MIT AND CC-BY-NC-ND-4.0)');
  assert.match(pkg.repository.url,/github\.com\/BoltBlue121\/dsh-moss-draw/);
  assert.match(pkg.description,/LoRA 叠加/);
  assert.equal(pkg.private,undefined);

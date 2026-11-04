@@ -179,7 +179,19 @@ export function createComfy(comfyUrl, fetchImpl = fetch) {
       return request(id ? `/history/${id}` : '/history?max_items=1000', null, false, signal);
     },
     queue: signal => request('/queue', null, false, signal),
-    image: (image, signal) => request(`/view?${new URLSearchParams(safeOutput(image))}`, null, true, signal),
+    // ComfyUI publishes every installed LoRA as an enum on the loader node, so the
+    // worker stays the single source of truth for "what can I stack".
+    async loraList(signal) {
+      for (const node of ['LoraLoaderModelOnly', 'LoraLoader']) {
+        let info;
+        try { info = await request(`/object_info/${node}`, null, false, signal); }
+        catch (error) { if (error.code === 'HTTP_ERROR' && error.status === 404) continue; throw error; }
+        const names = info?.[node]?.input?.required?.lora_name?.[0];
+        if (!Array.isArray(names)) continue;
+        return names.filter(name => typeof name === 'string').sort((a, b) => a.localeCompare(b));
+      }
+      throw fault('INVALID_RESPONSE', 'Worker did not report a LoRA list.');
+    },    image: (image, signal) => request(`/view?${new URLSearchParams(safeOutput(image))}`, null, true, signal),
   };
 }
 

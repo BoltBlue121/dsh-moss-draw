@@ -460,18 +460,17 @@ test('compile validates the whole document instead of hiding an invalid inactive
 });
 
 test('the module runs in a browser-like realm with bundled pure dependencies and no Node globals', async () => {
-  const source = await readFile(new URL('../src/studio-domain.mjs', import.meta.url), 'utf8');
-  // Execute real module bodies in separate lexical scopes, as a browser bundle does;
-  // only their imported API names cross the boundary, never private const/helpers.
-  const context = vm.createContext({ TextEncoder, structuredClone });
-  const cameraSource=await readFile(new URL('../src/studio-camera.mjs',import.meta.url),'utf8');
-  const cameraBody=cameraSource.replace(/^export\s+/gm,'');
-  const cameraModule=`const {projectStudioLayout,studioCameraMoved,studioCameraText}=(()=>{${cameraBody}\nreturn {projectStudioLayout,studioCameraMoved,studioCameraText};})();\n`;
-  const sharedSource=await readFile(new URL('../src/studio-shared.mjs',import.meta.url),'utf8');
-  const sharedBody=sharedSource.replace(/^export\s+/gm,'');
-  const sharedModule=`const {validateStudioShared,resolveStudioSharedDoc}=(()=>{${sharedBody}\nreturn {validateStudioShared,resolveStudioSharedDoc};})();\n`;
-  const program = cameraModule+sharedModule+source.replace(/^import[^\n]+\n/gm,'').replace(/\bexport\s+(?=function\s)/g, '') + '\n;({emptyStudioDoc,validateStudioDoc,compileStudioDoc})';
-  const api = vm.runInContext(program, context);
+  // Execute the built client with browser-only globals so an unlisted transitive
+  // dependency fails here exactly as it would at the normal client entry point.
+  let registration;
+  const context=vm.createContext({TextEncoder,AbortController,window:{__ModuleLoader__:{load:value=>{registration=value;}}}});
+  vm.runInContext('globalThis.structuredClone=value=>JSON.parse(JSON.stringify(value))',context);
+  const code=await readFile(new URL('../client/lib/client.js',import.meta.url),'utf8');
+  const marker="const entry=modules['client/entry.mjs'];";
+  assert.equal(code.split(marker).length,2);
+  vm.runInContext(code.replace(marker,"globalThis.domainForTest=modules['src/studio-domain.mjs'];"+marker),context);
+  registration.factory(name=>{assert.equal(name,'react');return {createElement:()=>null};});
+  const api=context.domainForTest;
   const doc = api.emptyStudioDoc('caption');
   doc.caption.caption = '浏览器中原样保留';
   assert.equal(api.compileStudioDoc(doc).prompt, '浏览器中原样保留');

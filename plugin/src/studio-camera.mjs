@@ -99,6 +99,7 @@ export function studioCameraFrame(layout) {
 
 /** Inference is intentionally simple and deterministic; explicit body data is never clamped. */
 export function studioBody(item, layout) {
+  if(item.role==='panel'||item.bubble||item.sketch)return {z:1,thickness:0,yaw:0,anchor:'screen'};
   if (item.body) return { ...item.body };
   const [x1, y1, x2, y2] = item.bbox;
   const covering = item.label !== 'character' && x1 <= layout.width * 0.05 && y1 <= layout.height * 0.05
@@ -227,7 +228,7 @@ function projectedOrder(layout, records) {
 }
 
 /** All returned coordinates are finite. Raw bounds include near-plane edge intersections. */
-export function projectStudioLayout(layout) {
+export function projectStudioLayout(layout, projectedItems) {
   const camera = guard(layout), moved = studioCameraMoved(layout);
   const bodies = new Map(layout.items.map((item) => [item.id, studioBody(item, layout)]));
   const pivot = pivotDepth(layout, bodies);
@@ -235,6 +236,10 @@ export function projectStudioLayout(layout) {
   const frame = moved ? cameraFrame(camera, pivot, layout) : base;
   const items = Object.create(null), checks = [];
   for (const item of layout.items) {
+    if (projectedItems?.has(item.id)) {
+      items[item.id] = projectedItems.get(item.id);
+      continue;
+    }
     const body = bodies.get(item.id);
     let raw = [...item.bbox], corners = null, depth = null, partial = false, inFront = true;
     if (body.anchor === 'world') {

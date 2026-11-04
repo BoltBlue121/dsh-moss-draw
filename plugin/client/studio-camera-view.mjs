@@ -1,10 +1,13 @@
 import {
-  STUDIO_CAMERA_DEFAULTS, STUDIO_CUBE_EDGES, studioBody, projectStudioLayout,
+  STUDIO_CAMERA_DEFAULTS, STUDIO_CUBE_EDGES, studioBody,
   captureStudioFraming, translateStudioItems, rebaseStudioCamera,
 } from '../src/studio-camera.mjs';
 import { estimateStudioBody, estimateStudioLayoutBodies, alignStudioGroupDepth } from '../src/studio-body.mjs';
 import { moveStudioVisual } from './studio-layout.mjs';
+import { studioDocSchemaVersion } from '../src/studio-doc-version.mjs';
 import { createStudioObserverView } from './studio-observer-view.mjs';
+import { createStudioRigView } from './studio-rig-view.mjs';
+import { projectStudioComposition } from '../src/studio-composition.mjs';
 import {
   STUDIO_VIEW_PRESETS, studioPresetPatch, applyStudioCameraChange, frameStudioView,
   studioTopView, cameraFromTopPoint, returnStudioItemsToView, studioCameraReadout,
@@ -95,7 +98,7 @@ function svgSpace(svg, width, height) {
 }
 
 export function createStudioCameraView(React) {
-  const h = React.createElement,Observer=createStudioObserverView(React);
+  const h = React.createElement,Observer=createStudioObserverView(React),Rig=createStudioRigView(React);
   return function StudioDirector({ model, state, onExit = () => {}, fullscreen = false }) {
     const layout = state.draft.doc.layout, cam = { ...STUDIO_CAMERA_DEFAULTS, ...layout.camera };
     const ids = state.selected ?? [], selected = ids.length === 1 ? layout.items.find(i => i.id === ids[0]) : null;
@@ -155,6 +158,7 @@ export function createStudioCameraView(React) {
       model.updateLayout(l => moveStudioVisual(l, options.ids ?? s.selected ?? [], dx, dy, {
         individual, freeze: (options.freeze ?? freeze) && !individual,
         follow: (options.hold ?? hold) === 'subject', projected: true, grabId: options.grabId ?? null,
+        schemaVersion: studioDocSchemaVersion(s.draft.doc),
       }));
     }
     function end(event = {}, cancel = false) {
@@ -281,7 +285,7 @@ export function createStudioCameraView(React) {
     }, [model]);
     const errors = [];
     let projection = { items: {}, order: [], checks: [] }, topView = null, readout = '';
-    try { projection = projectStudioLayout(layout); } catch (e) { errors.push(errorText(e)); }
+    try { projection = projectStudioComposition(layout); } catch (e) { errors.push(errorText(e)); }
     try { topView = studioTopView(layout); } catch (e) { errors.push(errorText(e)); }
     try { readout = studioCameraReadout(layout).text; } catch (e) { errors.push(errorText(e)); }
     errors.push(...(projection.checks ?? []).map(c => c.message));
@@ -421,6 +425,7 @@ export function createStudioCameraView(React) {
       h('text', { x: 60, y: 117, textAnchor: 'middle', fontSize: 10, fill: '#c9d7ee', pointerEvents: 'none' }, '环绕 / 俯仰'));
     return h('section', { className: `mps-director${fullscreen ? ' mps-director-fullscreen' : ''}`, tabIndex: 0, onKeyDown: keyDown },
       h('details', {className:'mps-observer-container',open:true},h('summary',null,'独立观察场景（不改变输出镜头）'),h(Observer,{model,state})),
+      h(Rig,{key:state.page?.page_id,model,state}),
       controls,
       h('p', { className: 'mps-camera-readout', 'data-camera-readout': true }, readout),
       h('p', { className: 'mps-director-help' }, '体块投影辅助，非真实3D重建。空白拖旋转；Shift/中/右键拖平移；滚轮距离，Alt+滚轮 FOV。M 切模式，方向键移动，+/- 距离，A 取景，F/Esc 退出。',

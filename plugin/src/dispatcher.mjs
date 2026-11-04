@@ -24,7 +24,7 @@ export function createDrawingService(config) {
     if(typeof requestId!=='string'||!requestId||requestId.length>128)return fallback;
     try{const claim=JSON.parse(await readFile(path.join(config.dataRoot,'requests',hash(requestId)+'.json'),'utf8'));
       if(claim.request_id!==requestId||!claim.params)throw fault('STORE_CORRUPT','Invalid request claim.');
-      return claim.params.model_variant==='native-sft-edit'?'native':'legacy';
+      return ['native-sft-edit','native-base-edit'].includes(claim.params.model_variant)?'native':'legacy';
     }catch(e){if(e.code==='ENOENT')return fallback;if(e.code==='STORE_CORRUPT')throw e;throw fault('STORE_CORRUPT','Unreadable request claim.');}
   }
   async function generateChild(input,assets=[],options={}) {
@@ -39,7 +39,7 @@ export function createDrawingService(config) {
   }
   regions=createRegionService({dataRoot:config.dataRoot,editEngine,childService:{generate:generateChild,run:(args,options)=>services.moss.run(args,options)}});
   const catalog = () => ({schemaVersion:1, default_backend:'moss', backends:[
-    {id:'moss', ...mossCatalog(),modes:mossCatalog().modes.map(m=>m.id==='edit'&&editEngine==='native'?{...NATIVE_EDIT_CATALOG,style_gpu_validated:false,quality_note:'Single-reference native edit is the tested path; multi-reference identity/layout remains experimental.'}:m.id==='regions'?{...m,edit_engine:editEngine,quality_note:'Multi-reference regions can duplicate subjects or leave seams; inspect every result.'}:m)}, ...structuredClone(BACKEND_CATALOG),
+    {id:'moss', ...mossCatalog(),modes:mossCatalog().modes.map(m=>m.id==='edit'&&editEngine==='native'?{...NATIVE_EDIT_CATALOG,style_gpu_validated:false,quality_note:'Single-reference smoke passed; multi-reference identity/layout remains experimental.'}:m.id==='regions'?{...m,edit_engine:editEngine,quality_note:'Multi-reference smoke showed duplicated subjects and seams; inspect every result.'}:m)}, ...structuredClone(BACKEND_CATALOG),
   ]});
   return Object.freeze({
     catalog,

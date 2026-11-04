@@ -1,7 +1,8 @@
-import {projectStudioLayout,studioCameraMoved} from '../src/studio-camera.mjs';
+import {studioCameraMoved} from '../src/studio-camera.mjs';
+import {hasStudioRig,projectStudioComposition} from '../src/studio-composition.mjs';
 const sameBox=(a,b)=>a&&b&&a.length===4&&b.length===4&&a.every((v,i)=>Math.abs(v-b[i])<1e-6);
 function visibleItems(doc){
- const layout=doc.layout,view=studioCameraMoved(layout)?projectStudioLayout(layout):null,result=new Map();
+ const layout=doc.layout,view=studioCameraMoved(layout)||hasStudioRig(layout)?projectStudioComposition(layout):null,result=new Map();
  for(const item of layout.items){const p=view?.items[item.id];if(item.hidden||view&&!p?.visible)continue;result.set(item.id,{...item,bbox:view?p.bbox:item.bbox});}return result;
 }
 export function proposalGhosts(proposal){

@@ -95,7 +95,7 @@ export function assertStudioConsentGeneration(db,{message_id,backend,page_id,tas
 }
 
 export function createStudioConsentMethods(api){
- const {transaction,row,checked,page,snapshot,stalePending,request,id,revision,text,prepareProposalResolution,commitProposalResolution,assertPagePolicy,assertSharedUnchanged,lockedUnchanged,readPolicy,studioTextOnlySession,setStudioTextOnly}=api;
+ const {transaction,row,checked,page,persistDocChange,persistMetadataChange,stalePending,request,id,revision,text,prepareProposalResolution,commitProposalResolution,assertPagePolicy,assertSharedUnchanged,lockedUnchanged,readPolicy,studioTextOnlySession,setStudioTextOnly}=api;
  const save=(db,c)=>db.prepare('UPDATE studio_consents SET value=? WHERE consent_id=?').run(JSON.stringify(c),c.consent_id);
  function get(db,key){const found=hasTable(db,'studio_consents')?db.prepare('SELECT value FROM studio_consents WHERE consent_id=?').get(key):null;if(!found)fail('STUDIO_NOT_FOUND','Consent not found.');return JSON.parse(found.value);}
  const state=(db,pageId)=>consentScope(db,pageId,row(db,pageId));
@@ -164,7 +164,7 @@ export function createStudioConsentMethods(api){
      }
      if(!c.handoff_ack)return wrap(c);
      const task=s.task;task.control='auto';task.stage=task.stage_before_takeover??'planning';delete task.owner_client;delete task.lease_token;delete task.stage_before_takeover;saveStudioTask(db,input.page_id,task);
-     c.status='applied';c.handoff=null;save(db,c);return {page:page(db,snapshot(db,current,current.title,JSON.parse(current.doc),'chat-handoff'))};
+     c.status='applied';c.handoff=null;save(db,c);return {page:page(db,persistMetadataChange(db,current,current.title,JSON.parse(current.doc),'chat-handoff'))};
     });
    },
    async requestConsent(input,trusted){
@@ -223,7 +223,7 @@ export function createStudioConsentMethods(api){
     }
     if(ops.continue_generation&&studioTextOnlySession(db))fail('STUDIO_TEXT_ONLY','Another page still has an active text-only restriction.');
     if(task){task.updated_at=now();saveStudioTask(db,c.page_id,task);}
-    const next=snapshot(db,s.current,s.current.title,doc,'chat-consent');
+    const next=prepared.resolution?persistDocChange(db,s.current,s.current.title,doc,'chat-consent',{allow_upgrade:false}):persistMetadataChange(db,s.current,s.current.title,JSON.parse(s.current.doc),'chat-consent');
     if(prepared.resolution)commitProposalResolution(db,prepared.resolution,next);
     stalePending(db,next,next.updated_at);
     const guard={consent_id:key,continue_generation:ops.continue_generation,backend:ops.generation.backend,page_id:c.page_id,task_id:task?.task_id??null,created_at:now()};

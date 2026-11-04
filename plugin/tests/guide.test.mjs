@@ -138,7 +138,7 @@ test('catalog distinguishes none-only styles, native t2i defaults and region pip
   assert.equal(region.default_style,'none');assert.deepEqual(region.styles,['none']);assert.equal(region.draft_inference_calls,0);
   assert.equal(region.run_advances_authorized_stages,true);assert.equal(region.view_advances,false);
   assert.equal(region.box_coordinates,'half-open original pixels');assert.equal(region.full_qwen_preserves_outside,false);
-  assert.deepEqual(c.styles.find(style=>style.id==='none').models,['base','sft'],'tested t2i support is explicit');
+  assert.deepEqual(c.styles.find(style=>style.id==='none').models,['base','sft','heal'],'tested t2i support is explicit');
   assert.deepEqual(c.styles.find(style=>style.id==='none').characters_models,['base','sft']);
   assert.equal(c.modes.find(mode=>mode.id==='characters').style_gpu_validated,false,'selectable does not claim visual validation');
 });

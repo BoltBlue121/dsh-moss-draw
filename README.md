@@ -2,11 +2,18 @@
 
 `@dsh-external/dsh-moss-draw` 是 DeepSeek Harness（DSH）Desktop 的一个 bundle 插件：它在 Host 侧注册预设 `ai-draw`（显示名「AI 画画」）、7 个 `art_*` agent 工具和一组按需指南，在客户端注册右侧栏页签「AI画画工作台」。所有图像生成与编辑都由**部署方自己的 ComfyUI** 通过 HTTP 执行；仓库只含插件代码与文档，不含模型权重、不含 LoRA 文件、不含生成物、不含任何凭据。
 
-- 包名 `@dsh-external/dsh-moss-draw`，版本 `0.8.0`，许可 MIT。
-- 已验证 DSH Desktop `0.2.1-rc.2` / `0.2.1-rc.3` / `0.2.1-rc.5`，矩阵外未验证，见 [docs/05-版本兼容矩阵.md](docs/05-版本兼容矩阵.md)。
+- 包名 `@dsh-external/dsh-moss-draw`，版本 `0.9.0`。原创代码适用 MIT，随包分发的第三方参考资料另有 CC BY-NC-ND 4.0 条件，见 [第三方说明](plugin/THIRD_PARTY_NOTICES.md)。
+- 0.8.0 基线已验证 DSH Desktop `0.2.1-rc.2` / `0.2.1-rc.3` / `0.2.1-rc.5`，矩阵外未验证，见 [docs/05-版本兼容矩阵.md](docs/05-版本兼容矩阵.md)。
 - 仓库地址：https://github.com/BoltBlue121/dsh-moss-draw
 
 本文用四个占位符：`<repo>` 表示本仓库根目录，`<DshHome>` 表示 DSH home（默认安装下是 `%USERPROFILE%\.dsh`），`<workspaceRoot>` 表示允许插件读图的绝对目录，`<comfy-host>` 表示 ComfyUI 的主机名或地址。命令默认在 `<repo>` 下执行，均在 Windows PowerShell 5.1 或 PowerShell 7 中有效。
+
+
+## 0.9.0 工作台
+
+在同一个 DSH 会话里，Agent 可以按需求创建分镜，用户可接手修改，再从保存的修订继续。工作稿支持分镜边框、气泡和草图、可摆姿的人偶与道具。
+
+选用 MOSS-Image-heal 时，KBlueLeaf 的示例预设为 16 步、CFG 3、shift 5、种子 0 和无内置 LoRA。采样采用 KohakuMoss 的 Euler，将 sigma 对齐到 1000 级训练网格，负向分支跳过第 22 层。模型卡及作者实现可从插件的模型选择区打开。
 
 ## 功能
 
@@ -118,10 +125,10 @@ $env:ELECTRON_RUN_AS_NODE = '1'
 $Desktop = "$env:LOCALAPPDATA\Programs\DeepSeek Harness"   # 换成实际安装目录
 $env:ELECTRON_RUN_AS_NODE = '1'
 & "$Desktop\DeepSeek Harness.exe" .\dist\build-package.mjs
-# 产出 dist\dsh-external-dsh-moss-draw-0.8.0.tgz、dist\package-manifest.json、dist\SHA256SUMS.txt
+# 产出 dist\dsh-external-dsh-moss-draw-0.9.0.tgz、dist\package-manifest.json、dist\SHA256SUMS.txt
 
 Get-Content .\dist\SHA256SUMS.txt
-Get-FileHash .\dist\dsh-external-dsh-moss-draw-0.8.0.tgz -Algorithm SHA256
+Get-FileHash .\dist\dsh-external-dsh-moss-draw-0.9.0.tgz -Algorithm SHA256
 ```
 
 用 `SHA256SUMS.txt` 与 `package-manifest.json`（逐文件 sha256）核对 tarball，然后装它（**GitHub Releases 发布页已附同一份 tgz、`SHA256SUMS.txt` 与源码 zip，不必自己构建**）：
@@ -130,7 +137,7 @@ Get-FileHash .\dist\dsh-external-dsh-moss-draw-0.8.0.tgz -Algorithm SHA256
 - 非桌面 profile（或 CLI 可用时）用：
 
 ```powershell
-dsh plugin add ./dsh-external-dsh-moss-draw-0.8.0.tgz
+dsh plugin add ./dsh-external-dsh-moss-draw-0.9.0.tgz
 ```
 
 接着按路径 B 的 2)–3) 执行：适配占位符、确认 `dsh.profile.bundles` 含 `@dsh-external/dsh-moss-draw`（插件管理器启用时会自己写；手工 `dsh plugin add` 只改 `dependencies`，要你补），再正常重启 DSH。

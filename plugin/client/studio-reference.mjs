@@ -1,4 +1,8 @@
-import {projectStudioLayout,studioCameraMoved} from '../src/studio-camera.mjs';
+import {studioCameraMoved} from '../src/studio-camera.mjs';
+import {projectStudioComposition,hasStudioRig} from '../src/studio-composition.mjs';
+import {studioAnnotationPrimitives,studioRigPrimitives,studioProjectedAnnotationLayout} from '../src/studio-annotations.mjs';
+import {paintStudioPrimitives} from './studio-artwork.mjs';
+import {studioShapeCameraBlocked,STUDIO_SHAPE_CAMERA_MESSAGE} from '../src/studio-shape-render.mjs';
 // Local user-selected raster files only. No URL fetching or Host filesystem access.
 const MAX_BYTES=32*1024*1024;
 const fail=message=>{throw new Error(`STUDIO_REFERENCE: ${message}`);};
@@ -40,9 +44,35 @@ export async function prepareStudioReference(file,env={}){
  }finally{bitmap?.close?.();}
 }
 export async function exportStudioAnnotation(reference,layout,{fit='contain',labels=true,selectedOnly=false,selected=[]}={},env={}){
- if(!reference?.blob)fail('No local reference image.');const t=referenceTransform(reference.width,reference.height,layout.width,layout.height,fit),createCanvas=env.createCanvas??(()=>document.createElement('canvas')),decode=env.decode??(blob=>createImageBitmap(blob));
- let bitmap;try{bitmap=await decode(reference.blob);const canvas=createCanvas();canvas.width=layout.width;canvas.height=layout.height;const g=canvas.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,canvas.width,canvas.height);g.drawImage(bitmap,t.sx,t.sy,t.sw,t.sh,t.dx,t.dy,t.dw,t.dh);const size=Math.max(14,Math.round(Math.max(canvas.width,canvas.height)/60));g.font=`600 ${size}px system-ui,sans-serif`;g.textBaseline='top';g.lineWidth=Math.max(2,Math.round(size/7));
-  const projection=studioCameraMoved(layout)?projectStudioLayout(layout):null,items=projection?projection.order.map(id=>{const item=layout.items.find(x=>x.id===id),p=projection.items[id];return{...item,bbox:p.visible?p.bbox:item.bbox,hidden:item.hidden||!p.visible};}):layout.items;
-  const palette=['#2563eb','#dc2626','#059669','#7c3aed','#b45309'];let index=0;for(const item of items){if(item.hidden||selectedOnly&&!selected.includes(item.id))continue;const [x,y,r,b]=item.bbox.map((n,i)=>Math.max(0,Math.min(i%2?canvas.height:canvas.width,n)));if(r<=x||b<=y)continue;const color=palette[index%palette.length];index++;g.strokeStyle=color;g.strokeRect(x,y,r-x,b-y);const label=labels?`${index} ${item.name||item.label}`:String(index),tw=Math.min(canvas.width-x,g.measureText(label).width+10),top=Math.max(0,y-size-7);g.fillStyle=color;g.fillRect(x,top,tw,size+5);g.fillStyle='#fff';g.fillText(label,x+4,top+2,Math.max(1,tw-8));}return await canvasBlob(canvas);
+ const createCanvas=env.createCanvas??(()=>document.createElement('canvas')),decode=env.decode??(blob=>createImageBitmap(blob));
+ if(reference&&!reference.blob)fail('No local reference image.');
+ if(studioShapeCameraBlocked({kind:'layout',schema_version:2,layout}))fail(STUDIO_SHAPE_CAMERA_MESSAGE);
+ const projection=studioCameraMoved(layout)||hasStudioRig(layout)?projectStudioComposition(layout):null;
+ const displayed=studioProjectedAnnotationLayout(layout,projection),byId=new Map(displayed.items.map(i=>[i.id,i]));
+ const items=projection?projection.order.map(id=>byId.get(id)):displayed.items;
+ let bitmap;
+ try{
+  const canvas=createCanvas();canvas.width=layout.width;canvas.height=layout.height;
+  const g=canvas.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,canvas.width,canvas.height);
+  if(reference){
+    const t=referenceTransform(reference.width,reference.height,layout.width,layout.height,fit);
+    bitmap=await decode(reference.blob);g.drawImage(bitmap,t.sx,t.sy,t.sw,t.sh,t.dx,t.dy,t.dw,t.dh);
+  }
+  const size=Math.max(14,Math.round(Math.max(canvas.width,canvas.height)/60));
+  g.font=`600 ${size}px system-ui,sans-serif`;g.textBaseline='top';g.lineWidth=Math.max(2,Math.round(size/7));
+  const palette=['#2563eb','#dc2626','#059669','#7c3aed','#b45309'];let index=0;
+  for(const item of items){
+    if(item.hidden||selectedOnly&&!selected.includes(item.id))continue;
+    const primitives=[...studioAnnotationPrimitives(displayed,item),...studioRigPrimitives(projection?.rigs,item.id)];
+    if(item.bubble||item.sketch||primitives.length){paintStudioPrimitives(g,primitives);continue;}
+    const [x,y,r,b]=item.bbox.map((n,i)=>Math.max(0,Math.min(i%2?canvas.height:canvas.width,n)));
+    if(r<=x||b<=y)continue;
+    const color=palette[index%palette.length];index++;g.strokeStyle=color;
+    if(item.shape){g.beginPath();item.shape.ring.forEach(([px,py],i)=>i?g.lineTo(px,py):g.moveTo(px,py));g.closePath();g.stroke();}
+    else g.strokeRect(x,y,r-x,b-y);
+    const label=labels?`${index} ${item.name||item.label}`:String(index),tw=Math.min(canvas.width-x,g.measureText(label).width+10),top=Math.max(0,y-size-7);
+    g.fillStyle=color;g.fillRect(x,top,tw,size+5);g.fillStyle='#fff';g.fillText(label,x+4,top+2,Math.max(1,tw-8));
+  }
+  return await canvasBlob(canvas);
  }finally{bitmap?.close?.();}
 }

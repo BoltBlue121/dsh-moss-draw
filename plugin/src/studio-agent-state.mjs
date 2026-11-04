@@ -1,3 +1,5 @@
+import {T2I_MODELS} from './catalog.mjs';
+import {assertStudioRichRemovals} from './studio-doc-version.mjs';
 import {randomUUID} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 
@@ -54,10 +56,10 @@ export function makeStudioTask({intent,mode='auto',max_runs,message_id,previous}
 }
 export function archiveStudioTask(db,pageId,task){db.prepare('INSERT INTO studio_task_history VALUES(?,?,?)').run(task.task_id,pageId,JSON.stringify(task));}
 export function createStudioTaskMethods(api){
- const {transaction,row,checked,page,snapshot,stalePending,request,id,revision,text,validateDoc,lockedUnchanged,assertPagePolicy,assertSharedUnchanged,acknowledgeDescriptions,checkDescriptionRefresh,studioTextOnlySession,setStudioTextOnly,assertConsentGeneration}=api;
+ const {transaction,row,checked,page,persistDocChange,persistMetadataChange,stalePending,request,id,revision,text,validateDoc,lockedUnchanged,assertPagePolicy,assertSharedUnchanged,acknowledgeDescriptions,checkDescriptionRefresh,studioTextOnlySession,setStudioTextOnly,assertConsentGeneration}=api;
  const pending=(db,key)=>!!db.prepare("SELECT 1 FROM studio_proposals WHERE page_id=? AND status='pending' LIMIT 1").get(key);
  const noPending=(db,key)=>{if(pending(db,key))error('STUDIO_REVIEW_REQUIRED','Resolve the existing human review before autonomous work.');};
- const shown=(db,current,task,operation)=>{saveStudioTask(db,current.page_id,task);const next=snapshot(db,current,current.title,JSON.parse(current.doc),operation);return page(db,next);};
+ const shown=(db,current,task,operation)=>{saveStudioTask(db,current.page_id,task);const next=persistMetadataChange(db,current,current.title,JSON.parse(current.doc),operation);return page(db,next);};
  const required=(db,key)=>{const task=readStudioTask(db,key);if(!task)error('STUDIO_TASK_REQUIRED','Start a task for this page first.');return task;};
  const opening=()=>({request_id:randomUUID(),status:'queued',requested_at:new Date().toISOString()});
  return {
@@ -92,16 +94,17 @@ export function createStudioTaskMethods(api){
     return shown(db,current,task,'agent-start');
    });
   },
-  async agentUpdate(input){
+  async agentUpdate(input,richRemovals){
    request(input,['page_id','expected_revision','doc','title','descriptions_checked'],['page_id','expected_revision','doc']);
    if(input.descriptions_checked!==undefined&&typeof input.descriptions_checked!=='boolean')error('STUDIO_INVALID_INPUT','descriptions_checked must be boolean.');
    const key=id(input.page_id),expected=revision(input.expected_revision),doc=validateDoc(input.doc),title=input.title===undefined?undefined:text(input.title,'page title',200);
    return transaction(true,db=>{const current=checked(db,key,expected),task=readStudioTask(db,key);if(task)requireStudioAuto(task);
+     assertStudioRichRemovals(JSON.parse(current.doc),doc,richRemovals);
      if(!task){assertTasklessTextUpdate(JSON.parse(current.doc),doc);if(title!==undefined&&title!==current.title)error('STUDIO_EDIT_SCOPE','Taskless text updates cannot rename the page.');}
      assertSharedUnchanged(JSON.parse(current.doc),doc);assertPagePolicy(db,current,doc,title??current.title);lockedUnchanged(JSON.parse(current.doc),doc);
     if(input.descriptions_checked){checkDescriptionRefresh(JSON.parse(current.doc),doc);acknowledgeDescriptions(db,key,doc);}
      if(task){task.stage=task.editing_only&&input.descriptions_checked?(task.editing_return_stage??'planning'):'planning';task.updated_at=new Date().toISOString();saveStudioTask(db,key,task);}
-    const next=snapshot(db,current,title??current.title,doc,'agent-update');stalePending(db,next,next.updated_at);return page(db,next);
+    const next=persistDocChange(db,current,title??current.title,doc,'agent-update',{allow_upgrade:false});stalePending(db,next,next.updated_at);return page(db,next);
    });
   },
   async takeover(input){
@@ -129,7 +132,7 @@ export function createStudioTaskMethods(api){
      task.editing_only=input.editing_only===true;setStudioTextOnly(db,key,task.editing_only);
      if(task.editing_only)task.editing_return_stage=task.stage_before_takeover??'planning';else delete task.editing_return_stage;
      if(input.max_runs!==undefined){if(!Number.isSafeInteger(input.max_runs)||input.max_runs<task.claimed_runs||input.max_runs>20)error('STUDIO_INVALID_INPUT','Budget cannot be below already claimed runs or above 20.');task.max_runs=input.max_runs;}
-    if(input.preferences!==undefined){request(input.preferences,['prefix','negative']);if(typeof input.preferences.prefix!=='string'||input.preferences.prefix.length>12000||typeof input.preferences.negative!=='string'||input.preferences.negative.length>3000)error('STUDIO_INVALID_INPUT','Invalid shared generation preferences.');task.preferences=structuredClone(input.preferences);}
+    if(input.preferences!==undefined){request(input.preferences,['prefix','negative','t2i_model','use_model_negative'],['prefix','negative']);if(input.preferences.use_model_negative!==undefined&&(input.preferences.use_model_negative!==true||input.preferences.negative!==''))error('STUDIO_INVALID_INPUT','Invalid model negative preference.');if(input.preferences.t2i_model!==undefined&&!T2I_MODELS.includes(input.preferences.t2i_model))error('STUDIO_INVALID_INPUT','Unknown MOSS t2i model preference.');if(typeof input.preferences.prefix!=='string'||input.preferences.prefix.length>12000||typeof input.preferences.negative!=='string'||input.preferences.negative.length>3000)error('STUDIO_INVALID_INPUT','Invalid shared generation preferences.');task.preferences=structuredClone(input.preferences);}
     task.control='auto';task.stage=completedText?'delivered':'planning';delete task.lease_token;delete task.owner_client;task.updated_at=new Date().toISOString();return shown(db,current,task,'human-resume');});
   },
   async requestOpen(input){request(input,['page_id']);const key=id(input.page_id);return transaction(true,db=>{const current=row(db,key),task=required(db,key);task.presentation=opening();saveStudioTask(db,key,task);return page(db,current);});},

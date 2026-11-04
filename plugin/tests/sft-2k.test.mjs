@@ -33,7 +33,7 @@ for (const model of ['base', 'sft']) {
 test('catalog exposes the single none style while separating experimental mode quality', () => {
   const c = catalog();
   const entry = c.styles.find(s => s.id === 'none');
-  assert.deepEqual(entry.models, ['base', 'sft']);
+  assert.deepEqual(entry.models, ['base', 'sft', 'heal']);
   assert.deepEqual(entry.characters_models, ['base', 'sft']);
   assert.equal(entry.trigger, '');
   assert.deepEqual(c.styles.map(s => s.id), ['none']);
